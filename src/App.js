@@ -1,7 +1,8 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { motion } from "framer-motion";
 
 // Pages
 import Login from "./pages/Login";
@@ -15,28 +16,48 @@ import TeacherProfile from "./pages/teacher/Profile";
 import TeacherSettings from "./pages/teacher/Settings";
 import AdminSettings from "./pages/admin/AdminSettings";
 import Notifications from "./pages/admin/Notifications";
-import EventsPage from "./pages/admin/EventsPage"; // ✅ Admin Events
+import EventsPage from "./pages/admin/EventsPage";
 import NotAuthorized from "./pages/NotAuthorized";
+
+// ✅ Custom Loading Screen with logo animation
+const LoadingScreen = () => {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100vh",
+        background: "linear-gradient(135deg, #2c3e50, #34495e, #2c3e50)",
+        color: "#fff",
+      }}
+    >
+      {/* Logo with bounce animation */}
+      <motion.img
+        src={process.env.PUBLIC_URL + "/logo.jpg"} // make sure logo.jpg is in public/
+        alt="Logo"
+        style={{ width: 100, height: 100, borderRadius: "50%" }}
+        animate={{ y: [0, -20, 0] }}
+        transition={{ duration: 1.2, repeat: Infinity }}
+      />
+
+      {/* Text message */}
+      <Typography
+        variant="h6"
+        sx={{ mt: 2, fontWeight: "bold", color: "#90caf9", textAlign: "center" }}
+      >
+        Please wait, loading your dashboard...
+      </Typography>
+    </Box>
+  );
+};
 
 // 🔒 Private Route wrapper
 const PrivateRoute = ({ children, role }) => {
   const { currentUser, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          background: "linear-gradient(135deg, #a29bfe, #74b9ff, #81ecec)",
-        }}
-      >
-        <CircularProgress sx={{ color: "#fff" }} />
-      </Box>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   if (!currentUser) return <Navigate to="/login" replace />;
 
@@ -49,21 +70,7 @@ const PrivateRoute = ({ children, role }) => {
 const LoginRoute = () => {
   const { currentUser, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          background: "linear-gradient(135deg, #a29bfe, #74b9ff, #81ecec)",
-        }}
-      >
-        <CircularProgress sx={{ color: "#fff" }} />
-      </Box>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   if (currentUser && currentUser.role) {
     return <Navigate to={`/${currentUser.role}/dashboard`} replace />;
@@ -75,9 +82,9 @@ const LoginRoute = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <Router basename="/Glow-English-Learning">
+      <Router basename={process.env.PUBLIC_URL}>
         <Routes>
-          {/* Public */}  
+          {/* Public */}
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/not-authorized" element={<NotAuthorized />} />
 
@@ -115,7 +122,7 @@ const App = () => {
             }
           />
           <Route
-            path="/admin/events" // ✅ Admin Events route
+            path="/admin/events"
             element={
               <PrivateRoute role="admin">
                 <EventsPage />
