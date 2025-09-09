@@ -75,9 +75,9 @@ const LoginRoute = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <Router>
+      <Router basename="/Glow-English-Learning">
         <Routes>
-          {/* Public */}
+          {/* Public */}  
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/not-authorized" element={<NotAuthorized />} />
 

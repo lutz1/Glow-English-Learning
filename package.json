@@ -2,6 +2,7 @@
   "name": "payroll",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://lutz1.github.io/Glow-English-Learning",
   "dependencies": {
     "@date-io/dayjs": "^3.2.0",
     "@emotion/react": "^11.14.0",
@@ -46,7 +47,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
   "browserslist": {
     "production": [
