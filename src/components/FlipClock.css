@@ -1,0 +1,35 @@
+.flip-clock {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.flip-unit {
+  background: #000;
+  color: #00ffcc;
+  font-size: 22px;
+  width: 50px;
+  height: 40px;
+  margin: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  animation: flip 1s infinite;
+}
+
+.flip-separator {
+  font-size: 22px;
+  color: #fff;
+  margin: 0 4px;
+}
+
+@keyframes flip {
+  0% { transform: rotateX(0deg); }
+  50% { transform: rotateX(180deg); }
+  100% { transform: rotateX(360deg); }
+}

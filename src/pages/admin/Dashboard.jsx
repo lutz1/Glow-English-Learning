@@ -1,0 +1,558 @@
+import React, { useEffect, useState } from "react";
+import {
+  Grid,
+  Typography,
+  Card,
+  CardContent,
+  Box,
+  CircularProgress,
+  Divider,
+  ButtonGroup,
+  Button,
+  Chip,
+  Avatar,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+} from "@mui/material";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../../firebase";
+import SchoolIcon from "@mui/icons-material/School";
+import PaidIcon from "@mui/icons-material/Paid";
+import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import AdminLayout from "../../layout/AdminLayout";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+
+// Define class type colors
+const classTypeColors = {
+"Chinese Class": { bgcolor: "#e53935", color: "#fff" }, // Red
+"Private Class": { bgcolor: "#3949ab", color: "#fff" }, // Indigo
+IELTS: { bgcolor: "#00897b", color: "#fff" }, // Teal
+"Vietnamese Class": { bgcolor: "#fbc02d", color: "#000" }, // Yellow with dark text
+"Group Class": { bgcolor: "#8e24aa", color: "#fff" }, // Purple
+Default: { bgcolor: "#64b5f6", color: "#fff" },
+};
+
+// FlipCard
+const FlipCard = ({ value }) => {
+  const [flipped, setFlipped] = useState(false);
+  const [prevValue, setPrevValue] = useState(value);
+
+  useEffect(() => {
+    if (value !== prevValue) {
+      setFlipped(true);
+      const timeout = setTimeout(() => {
+        setFlipped(false);
+        setPrevValue(value);
+      }, 600);
+      return () => clearTimeout(timeout);
+    }
+  }, [value, prevValue]);
+
+  return (
+    <Box sx={{ width: 60, height: 60, perspective: "1000px", mx: 0.5 }}>
+      <Box
+        sx={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          transformStyle: "preserve-3d",
+          transform: flipped ? "rotateX(-90deg)" : "rotateX(0deg)",
+          transition: "transform 0.6s ease-in-out",
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            width: "100%",
+            height: "100%",
+            bgcolor: "rgba(255,255,255,0.15)",
+            color: "#fff",
+            fontSize: "2rem",
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backfaceVisibility: "hidden",
+            borderRadius: "10px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          {prevValue}
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+// FlipClock
+const FlipClock = () => {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  const hours = time.getHours() % 12 || 12;
+  const minutes = time.getMinutes();
+  const ampm = time.getHours() >= 12 ? "PM" : "AM";
+  const paddedHours = hours.toString().padStart(2, "0");
+  const paddedMinutes = minutes.toString().padStart(2, "0");
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        bgcolor: "rgba(255,255,255,0.15)",
+        borderRadius: "10px",
+        px: 2,
+        py: 1,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+      }}
+    >
+      <FlipCard value={paddedHours} />
+      <Typography variant="h5" sx={{ mx: 0.5, fontWeight: "bold", color: "#fff" }}>
+        :
+      </Typography>
+      <FlipCard value={paddedMinutes} />
+      <Box
+        sx={{
+          ml: 1,
+          px: 1.5,
+          py: 1,
+          color: "#fff",
+          fontWeight: "bold",
+          fontSize: "1rem",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        {ampm}
+      </Box>
+    </Box>
+  );
+};
+
+// Dashboard
+const Dashboard = () => {
+  const [teacherCount, setTeacherCount] = useState(0);
+  const [teachersMap, setTeachersMap] = useState({});
+  const [totalPayroll, setTotalPayroll] = useState(0);
+  const [pendingPayroll, setPendingPayroll] = useState(0);
+  const [sessions, setSessions] = useState([]);
+  const [earningData, setEarningData] = useState([]);
+  const [topTeachers, setTopTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState("weekly");
+
+  const getWeekNumber = (d) => {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  };
+
+  const updateChartData = (sessionsArray) => {
+  const teacherData = {};
+
+  sessionsArray
+    .filter((s) => s.status === "completed")
+    .forEach((s) => {
+      const teacherName =
+        teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
+      const classType = s.classType || "Default";
+      const earnings = s.totalEarnings || 0;
+
+      if (!teacherData[teacherName]) {
+        teacherData[teacherName] = { teacherName };
+      }
+
+      teacherData[teacherName][classType] =
+        (teacherData[teacherName][classType] || 0) + earnings;
+    });
+
+  setEarningData(Object.values(teacherData));
+};
+
+  useEffect(() => {
+    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+      const teachers = snapshot.docs
+        .filter((doc) => doc.data().role === "teacher")
+        .map((doc) => ({ id: doc.id, ...doc.data() }));
+
+      setTeacherCount(teachers.length);
+
+      const map = {};
+      teachers.forEach((t) => {
+        map[t.id] = { name: t.name, photoURL: t.photoURL };
+      });
+      setTeachersMap(map);
+    });
+
+    return () => unsubUsers();
+  }, []);
+
+  useEffect(() => {
+    const unsubSessions = onSnapshot(collection(db, "sessions"), (snapshot) => {
+      const allSessions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      setSessions(allSessions.slice(0, 50));
+
+      setTotalPayroll(
+        allSessions
+          .filter((s) => s.status === "completed")
+          .reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
+      );
+
+      setPendingPayroll(
+        allSessions
+          .filter((s) => s.status === "pending")
+          .reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
+      );
+
+      const earningsByTeacher = {};
+      allSessions
+        .filter((s) => s.status === "completed")
+        .forEach((s) => {
+          earningsByTeacher[s.teacherId] =
+            (earningsByTeacher[s.teacherId] || 0) + (s.totalEarnings || 0);
+        });
+
+      const ranked = Object.entries(earningsByTeacher)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id, earnings]) => ({
+          id,
+          earnings,
+          name: teachersMap[id]?.name || "Unknown",
+          photoURL: teachersMap[id]?.photoURL || "",
+        }));
+
+      setTopTeachers(ranked);
+      updateChartData(allSessions);
+      setLoading(false);
+    });
+
+    return () => unsubSessions();
+  }, [period, teachersMap]);
+
+  if (loading)
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)",
+        }}
+      >
+        <CircularProgress sx={{ color: "#fff" }} />
+      </Box>
+    );
+
+  const statusColors = {
+    completed: "success",
+    pending: "warning",
+    ongoing: "info",
+  };
+
+  const glassCard = {
+    background: "rgba(255,255,255,0.1)",
+    backdropFilter: "blur(18px)",
+    borderRadius: "18px",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
+    color: "#fff",
+      boxShadow: "0 16px 32px rgba(0,0,0,0.5)",
+  };
+
+
+  return (
+    <AdminLayout>
+      <Box
+        sx={{
+          p: 3,
+          minHeight: "100vh",
+          background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)",
+          color: "#fff",
+        }}
+      >
+        {/* HEADER */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+          <Typography variant="h4" fontWeight="bold" sx={{ color: "#fff" }}>
+            Admin Dashboard Overview
+          </Typography>
+          <FlipClock />
+        </Box>
+
+        <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.2)" }} />
+
+        <Grid container spacing={3}>
+          {/* CARDS */}
+          <Grid item xs={12} sm={6} md={4}>
+            <Card sx={glassCard}>
+              <CardContent sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <SchoolIcon fontSize="large" sx={{ color: "#64b5f6" }} />
+                <Box>
+                  <Typography variant="subtitle2">Total Teachers</Typography>
+                  <Typography variant="h5">{teacherCount}</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <Card sx={glassCard}>
+              <CardContent sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <PaidIcon fontSize="large" sx={{ color: "#81c784" }} />
+                <Box>
+                  <Typography variant="subtitle2">Total Payroll</Typography>
+                  <Typography variant="h5">₱{totalPayroll.toFixed(2)}</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <Card sx={glassCard}>
+              <CardContent sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <HourglassEmptyIcon fontSize="large" sx={{ color: "#ffb74d" }} />
+                <Box>
+                  <Typography variant="subtitle2">Pending Earnings</Typography>
+                  <Typography variant="h5">₱{pendingPayroll.toFixed(2)}</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* CHART */}
+          <Grid item xs={12} md={8}>
+            <Card sx={{ ...glassCard, height: 450 }}>
+              <CardContent>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="h6">Earnings Summary</Typography>
+                  <ButtonGroup size="small">
+                    <Button
+                      variant={period === "weekly" ? "contained" : "outlined"}
+                      onClick={() => setPeriod("weekly")}
+                    >
+                      Weekly
+                    </Button>
+                    <Button
+                      variant={period === "monthly" ? "contained" : "outlined"}
+                      onClick={() => setPeriod("monthly")}
+                    >
+                      Monthly
+                    </Button>
+                  </ButtonGroup>
+                </Box>
+                <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={earningData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.2)" />
+                  <XAxis dataKey="teacherName" stroke="#fff" />
+                  <YAxis stroke="#fff" />
+                  <Tooltip
+                    formatter={(value, name) => [`₱${value.toFixed(2)}`, name]}
+                    contentStyle={{ backgroundColor: "rgba(8, 8, 8, 0.88)",borderRadius:"10px", color: "#fff" }}
+                  />
+
+                  {Object.keys(classTypeColors).map((classType) => (
+                    <Bar
+                      key={classType}
+                      dataKey={classType}
+                      stackId="earnings"
+                      fill={classTypeColors[classType].bgcolor}
+                      radius={[6, 6, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* TOP TEACHERS */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ ...glassCard, height: 450 }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}>
+                  🌟 Top Teachers
+                </Typography>
+                <List>
+                  {topTeachers.map((t, idx) => (
+                    <React.Fragment key={t.id}>
+                      <ListItem
+                        sx={{
+                          borderRadius: "12px",
+                          "&:hover": { backgroundColor: "rgba(255,255,255,0.1)" },
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Avatar
+                            src={t.photoURL || ""}
+                            alt={t.name || t.id}
+                            sx={{ width: 45, height: 45 }}
+                          />
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              {idx < 3 && (
+                                <EmojiEventsIcon
+                                  sx={{
+                                    color: idx === 0 ? "gold" : idx === 1 ? "silver" : "#cd7f32",
+                                    fontSize: 20,
+                                  }}
+                                />
+                              )}
+                              <Typography sx={{ fontWeight: "bold" }}>{t.name}</Typography>
+                            </Box>
+                          }
+                          secondary={<Typography color="rgba(255,255,255,0.7)">${t.earnings.toFixed(2)}</Typography>}
+                        />
+                      </ListItem>
+                      {idx < topTeachers.length - 1 && <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.1)" }} />}
+                    </React.Fragment>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* LATEST SESSIONS */}
+              <Grid item xs={12}>
+                <Card sx={glassCard}>
+                  <CardContent>
+                    <Typography
+                      variant="h6"
+                      sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}
+                    >
+                      📅 Latest Sessions
+                    </Typography>
+
+                    {/* Header Row */}
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: "3fr 2fr 2fr 1fr",
+                        p: 1.5,
+                        borderRadius: "10px",
+                        mb: 1,
+                        fontWeight: "bold",
+                        bgcolor: "rgba(255,255,255,0.12)",
+                      }}
+                    >
+                      <Typography>👩‍🏫 Teacher</Typography>
+                      <Typography>📌 Status</Typography>
+                      <Typography>⏰ Time</Typography>
+                      <Typography>💰 Earnings</Typography>
+                    </Box>
+
+                    {/* Session List */}
+                    <List sx={{ maxHeight: 400, overflow: "auto" }}>
+                      {sessions.map((s) => {
+                        const teacher = teachersMap[s.teacherId] || {};
+                        return (
+                          <React.Fragment key={s.id}>
+                            <ListItem
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: "3fr 2fr 2fr 1fr",
+                                alignItems: "center",
+                                p: 2,
+                                mb: 1,
+                                borderRadius: "12px",
+                                bgcolor: "rgba(255,255,255,0.05)",
+                                "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+                              }}
+                            >
+                              {/* Teacher */}
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                                <Avatar
+                                  src={teacher.photoURL || ""}
+                                  alt={teacher.name || s.teacherId}
+                                  sx={{ width: 40, height: 40 }}
+                                >
+                                  {(teacher.name || s.teacherName || "T")[0]}
+                                </Avatar>
+                                <Box>
+                                  <Typography sx={{ fontWeight: "bold", color: "#fff" }}>
+                                    {teacher.name || s.teacherName || s.teacherId}
+                                  </Typography>
+                                  <Chip
+                                    label={s.classType}
+                                    size="small"
+                                    sx={{
+                                      mt: 0.6,
+                                      fontWeight: "bold",
+                                      ...(classTypeColors[s.classType] || {
+                                        bgcolor: "#64b5f6",
+                                        color: "#fff",
+                                      }),
+                                    }}
+                                  />
+                                </Box>
+                              </Box>
+
+                              {/* Status */}
+                              <Chip
+                                label={s.status}
+                                size="small"
+                                color={statusColors[s.status] || "default"}
+                                sx={{ justifySelf: "start" }}
+                              />
+
+                              {/* Time */}
+                              <Box sx={{ textAlign: "center" }}>
+                                <Typography
+                                  sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)" }}
+                                >
+                                  {s.startTime?.toDate
+                                    ? s.startTime.toDate().toLocaleString()
+                                    : "-"}
+                                </Typography>
+                                <Typography
+                                  sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)" }}
+                                >
+                                  {s.endTime?.toDate
+                                    ? s.endTime.toDate().toLocaleString()
+                                    : "-"}
+                                </Typography>
+                              </Box>
+
+                              {/* Earnings */}
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "1rem",
+                                  color: "#81c784",
+                                  textAlign: "right",
+                                }}
+                              >
+                                ₱{s.totalEarnings?.toFixed(2) || "0.00"}
+                              </Typography>
+                            </ListItem>
+                          </React.Fragment>
+                        );
+                      })}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+        </Grid>
+      </Box>
+    </AdminLayout>
+  );
+};
+
+export default Dashboard;
