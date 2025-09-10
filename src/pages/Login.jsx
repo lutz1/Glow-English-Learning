@@ -22,6 +22,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { useAuth } from "../context/AuthContext";
+import Swal from "sweetalert2";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -52,16 +53,25 @@ const Login = () => {
     setSubmitting(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       const uid = userCredential.user.uid;
 
       const userDocRef = doc(db, "users", uid);
       const userDoc = await getDoc(userDocRef);
 
-      if (!userDoc.exists()) throw new Error("User record not found in Firestore.");
+      if (!userDoc.exists()) {
+        throw new Error("Email is not registered. Please check or contact Admin.");
+      }
+
       const userData = userDoc.data();
 
-      if (!userData?.role) throw new Error("No role found for this user.");
+      if (!userData?.role) {
+        throw new Error("No role found for this user.");
+      }
 
       if (userData.role !== role) {
         await signOut(auth);
@@ -70,9 +80,36 @@ const Login = () => {
       }
 
       navigate(`/${userData.role}/dashboard`, { replace: true });
+
+      // ✅ Success alert with logo
+      Swal.fire({
+        imageUrl: require("../assets/logo.jpg"),
+        imageWidth: 80,
+        imageHeight: 80,
+        imageAlt: "Glow English Logo",
+        title: "Login Successful 🎉",
+        text: `Welcome back, ${userData.name || "User"}!`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
     } catch (err) {
       console.error("Login error:", err);
-      setError(err.message);
+
+      // ❌ Error alert with logo
+      Swal.fire({
+        imageUrl: require("../assets/logo.jpg"),
+        borderRadius : "10px",
+        imageWidth: 80,
+        imageHeight: 80,
+        imageAlt: "Glow English Logo",
+        title: "Login Failed",
+        text: err.message.includes("wrong-password")
+          ? "Incorrect password. Please try again."
+          : err.message.includes("user-not-found")
+          ? "Email is not registered. Please check or contact Admin."
+          : err.message,
+        confirmButtonColor: "#2575fc",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +139,16 @@ const Login = () => {
     setContactSuccess(false);
 
     if (!email.trim()) {
-      setError("Please enter your registered email.");
+      Swal.fire({
+        imageUrl: require("../assets/logo.jpg"),
+        borderRadius : "10px",
+        imageWidth: 80,
+        imageHeight: 80,
+        imageAlt: "Glow English Logo",
+        title: "Missing Email",
+        text: "Please enter your registered email.",
+        confirmButtonColor: "#2575fc",
+      });
       setContacting(false);
       return;
     }
@@ -110,7 +156,16 @@ const Login = () => {
     try {
       await checkPendingRequest(email);
       if (hasPendingRequest) {
-        setError("You already have a pending reset request.");
+        Swal.fire({
+          imageUrl: require("../assets/logo.jpg"),
+          borderRadius : "10px",
+          imageWidth: 80,
+          imageHeight: 80,
+          imageAlt: "Glow English Logo",
+          title: "Request Already Pending",
+          text: "You already have a pending reset request.",
+          confirmButtonColor: "#2575fc",
+        });
         setContacting(false);
         return;
       }
@@ -122,11 +177,32 @@ const Login = () => {
         createdAt: serverTimestamp(),
       });
 
+      // ✅ Success popup with logo
+      Swal.fire({
+        imageUrl: require("../assets/logo.jpg"),
+        borderRadius : "10px",
+        imageWidth: 80,
+        imageHeight: 80,
+        imageAlt: "Glow English Logo",
+        title: "Request Sent ✅",
+        text: "Admin will reset your password shortly.",
+        timer: 2500,
+        showConfirmButton: false,
+      });
+
       setContactSuccess(true);
       setHasPendingRequest(true);
     } catch (err) {
       console.error("Contact admin error:", err);
-      setError(err.message);
+      Swal.fire({
+        imageUrl: require("../assets/logo.jpg"),
+        imageWidth: 80,
+        imageHeight: 80,
+        imageAlt: "Glow English Logo",
+        title: "Error",
+        text: err.message,
+        confirmButtonColor: "#2575fc",
+      });
     } finally {
       setContacting(false);
     }
@@ -343,11 +419,6 @@ const Login = () => {
             >
               {contacting ? "Sending..." : hasPendingRequest ? "Request Pending" : "Contact Admin"}
             </Button>
-            {contactSuccess && (
-              <Typography color="success.main" variant="body2" sx={{ mt: 1 }}>
-                Notification sent! Admin will reset your password shortly.
-              </Typography>
-            )}
           </Box>
         </Box>
       </Box>

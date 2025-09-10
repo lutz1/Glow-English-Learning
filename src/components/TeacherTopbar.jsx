@@ -12,7 +12,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 
 const TeacherTopbar = () => {
   const { currentUser, logout } = useAuth();
@@ -25,27 +25,26 @@ const TeacherTopbar = () => {
   const open = Boolean(anchorEl);
 
   useEffect(() => {
-    const fetchTeacher = async () => {
-      if (!currentUser?.uid) return;
+    if (!currentUser?.uid) return;
 
-      try {
-        // ✅ Fetch user document directly by UID
-        const docRef = doc(db, "users", currentUser.uid);
-        const docSnap = await getDoc(docRef);
-
+    // ✅ Real-time listener on the user document
+    const unsubscribe = onSnapshot(
+      doc(db, "users", currentUser.uid),
+      (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setTeacherName(data.name || data.email || ""); // fallback to email if no name
+          setTeacherName(data.name || data.email || "");
           setPhotoURL(data.photoURL || "");
         } else {
           console.warn("⚠️ No user profile found in /users");
         }
-      } catch (error) {
+      },
+      (error) => {
         console.error("Error fetching teacher profile:", error);
       }
-    };
+    );
 
-    fetchTeacher();
+    return () => unsubscribe();
   }, [currentUser]);
 
   const handleMenuOpen = (event) => {

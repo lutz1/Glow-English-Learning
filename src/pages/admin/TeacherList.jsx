@@ -122,26 +122,50 @@ const TeacherList = () => {
 
   // ✅ Delete Teacher
   const handleDelete = async (id) => {
-    Swal.fire({
-      title: "Are you sure?",
-      text: "This action cannot be undone.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, delete!",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await deleteDoc(doc(db, "users", id));
-          fetchTeachers();
-          Swal.fire({ icon: "success", title: "Deleted!", timer: 1500 });
-        } catch (err) {
-          Swal.fire("Error", err.message, "error");
-        }
+  Swal.fire({
+    title: "Are you sure?",
+    text: "This will permanently delete the teacher and all their sessions!",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    confirmButtonText: "Yes, delete!",
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        const batch = writeBatch(db);
+
+        // 🔹 Find all sessions linked to this teacher
+        const sessionsRef = collection(db, "sessions"); // 👈 change if your collection is named differently
+        const q = query(sessionsRef, where("teacherId", "==", id));
+        const querySnapshot = await getDocs(q);
+
+        querySnapshot.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+
+        // 🔹 Delete teacher document
+        batch.delete(doc(db, "users", id));
+
+        // 🔹 Commit all deletes in one transaction
+        await batch.commit();
+
+        // Refresh list
+        fetchTeachers();
+
+        Swal.fire({
+          icon: "success",
+          title: "Deleted!",
+          text: "Teacher and all their sessions have been removed.",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire("Error", err.message, "error");
       }
-    });
-  };
+    }
+  });
+};
 
   // ✅ Reset Password
   const handleResetPassword = async (teacher) => {

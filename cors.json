@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://192.168.12.150:3000/Glow-English-Learning", "https://lutz1.github.io/Glow-English-Learning"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "responseHeader": ["Content-Type", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -9,7 +9,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCWIwBb3s7C7ZHaGItks1XgVWT8r9vtJ9s",
   authDomain: "payroll-system-aabb4.firebaseapp.com",
   projectId: "payroll-system-aabb4",
-  storageBucket: "payroll-system-aabb4.appspot.com", // ✅ fixed here
+  storageBucket: "payroll-system-aabb4.firebasestorage.app",  // ✅ correct bucket name
   messagingSenderId: "489042394477",
   appId: "1:489042394477:web:f5874809bf49b3f8bb6e64",
 };

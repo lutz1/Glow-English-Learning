@@ -80,10 +80,12 @@ const Dashboard = () => {
             rate: typeof s.rate === "number" ? s.rate : Number(s.rate) || 0,
             status: s.status || "pending",
             totalEarnings:
-              typeof s.totalEarnings === "number"
+              s.actualEarnings != null
+                ? Number(s.actualEarnings)
+                : typeof s.totalEarnings === "number"
                 ? s.totalEarnings
                 : Number(s.rate) || 0,
-            screenshotBase64: s.screenshotBase64 || null,
+            screenshotUrl: s.screenshotUrl || s.screenshotBase64 || null,
           };
         });
 
@@ -97,8 +99,16 @@ const Dashboard = () => {
 
         // === Stats ===
         const today = new Date();
-        const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        const startOfToday = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate()
+        );
+        const endOfToday = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + 1
+        );
 
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -226,7 +236,7 @@ const Dashboard = () => {
         params?.value != null ? `₱${Number(params.value).toLocaleString()}` : "₱0",
     },
     {
-      field: "screenshotBase64",
+      field: "screenshotUrl",
       headerName: "Screenshot",
       flex: 0.6,
       renderCell: (params) =>
