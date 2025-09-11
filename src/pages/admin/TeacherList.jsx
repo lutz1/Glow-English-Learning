@@ -1,3 +1,4 @@
+// TeacherList.jsx
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -32,20 +33,23 @@ import {
 import {
   collection,
   getDocs,
-  deleteDoc,
   doc,
   updateDoc,
   setDoc,
+  writeBatch,
+  query,
+  where,
 } from "firebase/firestore";
 import {
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { db, auth, secondaryAuth } from "../../firebase";
+import { db, auth, secondaryAuth } from "../../firebase"; // ✅ removed storage
+import { getStorage, ref, listAll, deleteObject } from "firebase/storage";
+import Swal from "sweetalert2";
 import Sidebar from "../../components/Sidebar";
 import Topbar from "../../components/Topbar";
-import Swal from "sweetalert2";
 
 const TeacherList = () => {
   const [teachers, setTeachers] = useState([]);
@@ -120,49 +124,63 @@ const TeacherList = () => {
     }
   }, [searchQuery, teachers]);
 
-  // ✅ Delete Teacher
+  // ✅ Delete Teacher + Sessions (Firestore only)
   const handleDelete = async (id) => {
   Swal.fire({
     title: "Are you sure?",
-    text: "This will permanently delete the teacher and all their sessions!",
+    text: "This will permanently delete the teacher, their sessions, and all storage files.",
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#d33",
     cancelButtonColor: "#3085d6",
     confirmButtonText: "Yes, delete!",
   }).then(async (result) => {
-    if (result.isConfirmed) {
-      try {
-        const batch = writeBatch(db);
+    if (!result.isConfirmed) return;
 
-        // 🔹 Find all sessions linked to this teacher
-        const sessionsRef = collection(db, "sessions"); // 👈 change if your collection is named differently
-        const q = query(sessionsRef, where("teacherId", "==", id));
-        const querySnapshot = await getDocs(q);
+    try {
+      const batch = writeBatch(db);
 
-        querySnapshot.forEach((docSnap) => {
-          batch.delete(docSnap.ref);
-        });
-
-        // 🔹 Delete teacher document
-        batch.delete(doc(db, "users", id));
-
-        // 🔹 Commit all deletes in one transaction
-        await batch.commit();
-
-        // Refresh list
-        fetchTeachers();
-
-        Swal.fire({
-          icon: "success",
-          title: "Deleted!",
-          text: "Teacher and all their sessions have been removed.",
-          timer: 2000,
-          showConfirmButton: false,
-        });
-      } catch (err) {
-        Swal.fire("Error", err.message, "error");
+      // 🔹 Find all sessions linked to this teacher
+      const sessionsRef = collection(db, "sessions");
+      const q = query(sessionsRef, where("teacherId", "==", id));
+      const querySnapshot = await getDocs(q);
+      for (const docSnap of querySnapshot.docs) {
+        batch.delete(docSnap.ref);
       }
+
+      // 🔹 Delete teacher doc
+      batch.delete(doc(db, "users", id));
+
+      // Commit batch first
+      await batch.commit();
+
+      // 🔹 Now clean up Firebase Storage
+      const storage = getStorage();
+      const folders = ["screenshots", "receipts", "teacherPhotos", "gcashQR"];
+
+      for (const folder of folders) {
+        const folderRef = ref(storage, `${folder}/${id}`);
+        try {
+          const listResult = await listAll(folderRef);
+          for (const fileRef of listResult.items) {
+            await deleteObject(fileRef);
+          }
+        } catch (err) {
+          console.warn(`No files or error in ${folder}:`, err.message);
+        }
+      }
+
+      fetchTeachers();
+
+      Swal.fire({
+        icon: "success",
+        title: "Deleted!",
+        text: "Teacher, sessions, and storage files deleted.",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
     }
   });
 };
@@ -242,8 +260,7 @@ const TeacherList = () => {
           gender: form.gender,
           role: form.role || "teacher",
           photoURL: form.photoURL,
-          // email stays as-is (editing auth email would need extra flows)
-          email: selectedTeacher.email,
+          email: selectedTeacher.email, // don’t allow changing email here
         };
         await updateDoc(ref, updateData);
         Swal.fire({ icon: "success", title: "Teacher updated!", timer: 1500 });

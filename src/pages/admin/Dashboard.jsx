@@ -13,8 +13,7 @@ import {
   Avatar,
   List,
   ListItem,
-  ListItemAvatar,
-  ListItemText,
+  Dialog,
 } from "@mui/material";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -31,120 +30,19 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
 
 // Define class type colors
 const classTypeColors = {
-"Chinese Class": { bgcolor: "#e53935", color: "#fff" }, // Red
-"Private Class": { bgcolor: "#3949ab", color: "#fff" }, // Indigo
-IELTS: { bgcolor: "#00897b", color: "#fff" }, // Teal
-"Vietnamese Class": { bgcolor: "#fbc02d", color: "#000" }, // Yellow with dark text
-"Group Class": { bgcolor: "#8e24aa", color: "#fff" }, // Purple
-Default: { bgcolor: "#64b5f6", color: "#fff" },
+  "Chinese Class": { bgcolor: "#e53935", color: "#fff" },
+  "Private Class": { bgcolor: "#3949ab", color: "#fff" },
+  IELTS: { bgcolor: "#00897b", color: "#fff" },
+  "Vietnamese Class": { bgcolor: "#fbc02d", color: "#000" },
+  "Group Class": { bgcolor: "#8e24aa", color: "#fff" },
+  Default: { bgcolor: "#64b5f6", color: "#fff" },
 };
 
-// FlipCard
-const FlipCard = ({ value }) => {
-  const [flipped, setFlipped] = useState(false);
-  const [prevValue, setPrevValue] = useState(value);
-
-  useEffect(() => {
-    if (value !== prevValue) {
-      setFlipped(true);
-      const timeout = setTimeout(() => {
-        setFlipped(false);
-        setPrevValue(value);
-      }, 600);
-      return () => clearTimeout(timeout);
-    }
-  }, [value, prevValue]);
-
-  return (
-    <Box sx={{ width: 60, height: 60, perspective: "1000px", mx: 0.5 }}>
-      <Box
-        sx={{
-          position: "relative",
-          width: "100%",
-          height: "100%",
-          transformStyle: "preserve-3d",
-          transform: flipped ? "rotateX(-90deg)" : "rotateX(0deg)",
-          transition: "transform 0.6s ease-in-out",
-        }}
-      >
-        <Box
-          sx={{
-            position: "absolute",
-            width: "100%",
-            height: "100%",
-            bgcolor: "rgba(255,255,255,0.15)",
-            color: "#fff",
-            fontSize: "2rem",
-            fontWeight: "bold",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backfaceVisibility: "hidden",
-            borderRadius: "10px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-          }}
-        >
-          {prevValue}
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-// FlipClock
-const FlipClock = () => {
-  const [time, setTime] = useState(new Date());
-  useEffect(() => {
-    const interval = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-  const hours = time.getHours() % 12 || 12;
-  const minutes = time.getMinutes();
-  const ampm = time.getHours() >= 12 ? "PM" : "AM";
-  const paddedHours = hours.toString().padStart(2, "0");
-  const paddedMinutes = minutes.toString().padStart(2, "0");
-
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        bgcolor: "rgba(255,255,255,0.15)",
-        borderRadius: "10px",
-        px: 2,
-        py: 1,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
-      }}
-    >
-      <FlipCard value={paddedHours} />
-      <Typography variant="h5" sx={{ mx: 0.5, fontWeight: "bold", color: "#fff" }}>
-        :
-      </Typography>
-      <FlipCard value={paddedMinutes} />
-      <Box
-        sx={{
-          ml: 1,
-          px: 1.5,
-          py: 1,
-          color: "#fff",
-          fontWeight: "bold",
-          fontSize: "1rem",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        {ampm}
-      </Box>
-    </Box>
-  );
-};
-
-// Dashboard
+// Dashboard Component
 const Dashboard = () => {
   const [teacherCount, setTeacherCount] = useState(0);
   const [teachersMap, setTeachersMap] = useState({});
@@ -156,36 +54,31 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("weekly");
 
-  const getWeekNumber = (d) => {
-    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-  };
+  // For screenshot lightbox
+  const [openScreenshot, setOpenScreenshot] = useState(false);
+  const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
   const updateChartData = (sessionsArray) => {
-  const teacherData = {};
+    const teacherData = {};
+    sessionsArray
+      .filter((s) => s.status === "completed")
+      .forEach((s) => {
+        const teacherName =
+          teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
+        const classType = s.classType || "Default";
+        const earnings = s.totalEarnings || 0;
 
-  sessionsArray
-    .filter((s) => s.status === "completed")
-    .forEach((s) => {
-      const teacherName =
-        teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
-      const classType = s.classType || "Default";
-      const earnings = s.totalEarnings || 0;
+        if (!teacherData[teacherName]) {
+          teacherData[teacherName] = { teacherName };
+        }
+        teacherData[teacherName][classType] =
+          (teacherData[teacherName][classType] || 0) + earnings;
+      });
 
-      if (!teacherData[teacherName]) {
-        teacherData[teacherName] = { teacherName };
-      }
+    setEarningData(Object.values(teacherData));
+  };
 
-      teacherData[teacherName][classType] =
-        (teacherData[teacherName][classType] || 0) + earnings;
-    });
-
-  setEarningData(Object.values(teacherData));
-};
-
+  // Load teachers
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       const teachers = snapshot.docs
@@ -204,6 +97,7 @@ const Dashboard = () => {
     return () => unsubUsers();
   }, []);
 
+  // Load sessions
   useEffect(() => {
     const unsubSessions = onSnapshot(collection(db, "sessions"), (snapshot) => {
       const allSessions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -273,11 +167,9 @@ const Dashboard = () => {
     background: "rgba(255,255,255,0.1)",
     backdropFilter: "blur(18px)",
     borderRadius: "18px",
-    boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
+    boxShadow: "0 16px 32px rgba(0,0,0,0.5)",
     color: "#fff",
-      boxShadow: "0 16px 32px rgba(0,0,0,0.5)",
   };
-
 
   return (
     <AdminLayout>
@@ -290,11 +182,10 @@ const Dashboard = () => {
         }}
       >
         {/* HEADER */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" sx={{ color: "#fff" }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+          <Typography variant="h4" fontWeight="bold">
             Admin Dashboard Overview
           </Typography>
-          <FlipClock />
         </Box>
 
         <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.2)" }} />
@@ -312,6 +203,7 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </Grid>
+
           <Grid item xs={12} sm={6} md={4}>
             <Card sx={glassCard}>
               <CardContent sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -323,6 +215,7 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </Grid>
+
           <Grid item xs={12} sm={6} md={4}>
             <Card sx={glassCard}>
               <CardContent sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -339,7 +232,7 @@ const Dashboard = () => {
           <Grid item xs={12} md={8}>
             <Card sx={{ ...glassCard, height: 450 }}>
               <CardContent>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
                   <Typography variant="h6">Earnings Summary</Typography>
                   <ButtonGroup size="small">
                     <Button
@@ -357,26 +250,29 @@ const Dashboard = () => {
                   </ButtonGroup>
                 </Box>
                 <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={earningData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.2)" />
-                  <XAxis dataKey="teacherName" stroke="#fff" />
-                  <YAxis stroke="#fff" />
-                  <Tooltip
-                    formatter={(value, name) => [`₱${value.toFixed(2)}`, name]}
-                    contentStyle={{ backgroundColor: "rgba(8, 8, 8, 0.88)",borderRadius:"10px", color: "#fff" }}
-                  />
-
-                  {Object.keys(classTypeColors).map((classType) => (
-                    <Bar
-                      key={classType}
-                      dataKey={classType}
-                      stackId="earnings"
-                      fill={classTypeColors[classType].bgcolor}
-                      radius={[6, 6, 0, 0]}
+                  <BarChart data={earningData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.2)" />
+                    <XAxis dataKey="teacherName" stroke="#fff" />
+                    <YAxis stroke="#fff" />
+                    <Tooltip
+                      formatter={(value, name) => [`₱${value.toFixed(2)}`, name]}
+                      contentStyle={{
+                        backgroundColor: "rgba(8, 8, 8, 0.88)",
+                        borderRadius: "10px",
+                        color: "#fff",
+                      }}
                     />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
+                    {Object.keys(classTypeColors).map((classType) => (
+                      <Bar
+                        key={classType}
+                        dataKey={classType}
+                        stackId="earnings"
+                        fill={classTypeColors[classType].bgcolor}
+                        radius={[6, 6, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
           </Grid>
@@ -397,31 +293,18 @@ const Dashboard = () => {
                           "&:hover": { backgroundColor: "rgba(255,255,255,0.1)" },
                         }}
                       >
-                        <ListItemAvatar>
-                          <Avatar
-                            src={t.photoURL || ""}
-                            alt={t.name || t.id}
-                            sx={{ width: 45, height: 45 }}
+                        <Avatar src={t.photoURL || ""} alt={t.name || t.id} sx={{ mr: 2 }} />
+                        <Typography sx={{ fontWeight: "bold", flex: 1 }}>{t.name}</Typography>
+                        <Typography>₱{t.earnings.toFixed(2)}</Typography>
+                        {idx < 3 && (
+                          <EmojiEventsIcon
+                            sx={{
+                              ml: 1,
+                              color: idx === 0 ? "gold" : idx === 1 ? "silver" : "#cd7f32",
+                            }}
                           />
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                              {idx < 3 && (
-                                <EmojiEventsIcon
-                                  sx={{
-                                    color: idx === 0 ? "gold" : idx === 1 ? "silver" : "#cd7f32",
-                                    fontSize: 20,
-                                  }}
-                                />
-                              )}
-                              <Typography sx={{ fontWeight: "bold" }}>{t.name}</Typography>
-                            </Box>
-                          }
-                          secondary={<Typography color="rgba(255,255,255,0.7)">${t.earnings.toFixed(2)}</Typography>}
-                        />
+                        )}
                       </ListItem>
-                      {idx < topTeachers.length - 1 && <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.1)" }} />}
                     </React.Fragment>
                   ))}
                 </List>
@@ -430,127 +313,177 @@ const Dashboard = () => {
           </Grid>
 
           {/* LATEST SESSIONS */}
-              <Grid item xs={12}>
-                <Card sx={glassCard}>
-                  <CardContent>
-                    <Typography
-                      variant="h6"
-                      sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}
-                    >
-                      📅 Latest Sessions
-                    </Typography>
+          <Grid item xs={12}>
+            <Card sx={glassCard}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}>
+                  📅 Latest Sessions
+                </Typography>
 
-                    {/* Header Row */}
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: "3fr 2fr 2fr 1fr",
-                        p: 1.5,
-                        borderRadius: "10px",
-                        mb: 1,
-                        fontWeight: "bold",
-                        bgcolor: "rgba(255,255,255,0.12)",
-                      }}
-                    >
-                      <Typography>👩‍🏫 Teacher</Typography>
-                      <Typography>📌 Status</Typography>
-                      <Typography>⏰ Time</Typography>
-                      <Typography>💰 Earnings</Typography>
-                    </Box>
+                {/* Header Row */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr",
+                    p: 1.5,
+                    borderRadius: "10px",
+                    mb: 1,
+                    fontWeight: "bold",
+                    bgcolor: "rgba(255,255,255,0.12)",
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography>👩‍🏫 Teacher</Typography>
+                  <Typography>📌 Status</Typography>
+                  <Typography>⏰ Time</Typography>
+                  <Typography>💰 Earnings</Typography>
+                  <Typography>🖼 Screenshot</Typography>
+                </Box>
 
-                    {/* Session List */}
-                    <List sx={{ maxHeight: 400, overflow: "auto" }}>
-                      {sessions.map((s) => {
-                        const teacher = teachersMap[s.teacherId] || {};
-                        return (
-                          <React.Fragment key={s.id}>
-                            <ListItem
+                {/* Session List */}
+                <List sx={{ maxHeight: 400, overflow: "auto" }}>
+                  {sessions.map((s) => {
+                    const teacher = teachersMap[s.teacherId] || {};
+                    return (
+                      <ListItem
+                        key={s.id}
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr",
+                          alignItems: "center",
+                          p: 1.5,
+                          mb: 1,
+                          borderRadius: "12px",
+                          bgcolor: "rgba(255,255,255,0.05)",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+                          textAlign: "center",
+                        }}
+                      >
+                        {/* Teacher */}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                          <Avatar src={teacher.photoURL || ""} />
+                          <Box sx={{ textAlign: "left" }}>
+                            <Typography sx={{ fontWeight: "bold" }}>
+                              {teacher.name || s.teacherName || s.teacherId}
+                            </Typography>
+                            <Chip
+                              label={s.classType}
+                              size="small"
                               sx={{
-                                display: "grid",
-                                gridTemplateColumns: "3fr 2fr 2fr 1fr",
-                                alignItems: "center",
-                                p: 2,
-                                mb: 1,
-                                borderRadius: "12px",
-                                bgcolor: "rgba(255,255,255,0.05)",
-                                "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+                                mt: 0.5,
+                                fontWeight: "bold",
+                                ...(classTypeColors[s.classType] || classTypeColors.Default),
                               }}
-                            >
-                              {/* Teacher */}
-                              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                                <Avatar
-                                  src={teacher.photoURL || ""}
-                                  alt={teacher.name || s.teacherId}
-                                  sx={{ width: 40, height: 40 }}
-                                >
-                                  {(teacher.name || s.teacherName || "T")[0]}
-                                </Avatar>
-                                <Box>
-                                  <Typography sx={{ fontWeight: "bold", color: "#fff" }}>
-                                    {teacher.name || s.teacherName || s.teacherId}
-                                  </Typography>
-                                  <Chip
-                                    label={s.classType}
-                                    size="small"
-                                    sx={{
-                                      mt: 0.6,
-                                      fontWeight: "bold",
-                                      ...(classTypeColors[s.classType] || {
-                                        bgcolor: "#64b5f6",
-                                        color: "#fff",
-                                      }),
-                                    }}
-                                  />
-                                </Box>
-                              </Box>
+                            />
+                          </Box>
+                        </Box>
 
-                              {/* Status */}
-                              <Chip
-                                label={s.status}
-                                size="small"
-                                color={statusColors[s.status] || "default"}
-                                sx={{ justifySelf: "start" }}
-                              />
+                        {/* Status */}
+                        <Chip
+                          label={s.status}
+                          size="small"
+                          color={statusColors[s.status] || "default"}
+                        />
 
-                              {/* Time */}
-                              <Box sx={{ textAlign: "center" }}>
-                                <Typography
-                                  sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)" }}
-                                >
-                                  {s.startTime?.toDate
-                                    ? s.startTime.toDate().toLocaleString()
-                                    : "-"}
-                                </Typography>
-                                <Typography
-                                  sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)" }}
-                                >
-                                  {s.endTime?.toDate
-                                    ? s.endTime.toDate().toLocaleString()
-                                    : "-"}
-                                </Typography>
-                              </Box>
+                        {/* Time */}
+                        <Box>
+                          <Typography sx={{ fontSize: "0.75rem" }}>
+                            {s.startTime?.toDate ? s.startTime.toDate().toLocaleString() : "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: "0.75rem" }}>
+                            {s.endTime?.toDate ? s.endTime.toDate().toLocaleString() : "-"}
+                          </Typography>
+                        </Box>
 
-                              {/* Earnings */}
-                              <Typography
-                                sx={{
-                                  fontWeight: "bold",
-                                  fontSize: "1rem",
-                                  color: "#81c784",
-                                  textAlign: "right",
-                                }}
-                              >
-                                ₱{s.totalEarnings?.toFixed(2) || "0.00"}
-                              </Typography>
-                            </ListItem>
-                          </React.Fragment>
-                        );
-                      })}
-                    </List>
-                  </CardContent>
-                </Card>
-              </Grid>
+                        {/* Earnings */}
+                        <Typography sx={{ fontWeight: "bold", color: "#81c784" }}>
+                          ₱{s.totalEarnings?.toFixed(2) || "0.00"}
+                        </Typography>
+
+                        {/* Screenshot */}
+                        <Box>
+                          {s.screenshotUrl ? (
+                            <img
+                              src={s.screenshotUrl}
+                              alt="Session Screenshot"
+                              style={{
+                                width: 60,
+                                height: 40,
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                cursor: "pointer",
+                                transition: "transform 0.2s ease",
+                              }}
+                              onClick={() => {
+                                setSelectedScreenshot(s.screenshotUrl);
+                                setOpenScreenshot(true);
+                              }}
+                            />
+                          ) : (
+                            <Typography sx={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>
+                              N/A
+                            </Typography>
+                          )}
+                        </Box>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
       </Box>
+
+      {/* Screenshot Lightbox */}
+      {selectedScreenshot && (
+        <Dialog
+          open={openScreenshot}
+          onClose={() => setOpenScreenshot(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            sx: { background: "rgba(0,0,0,0.9)", boxShadow: "none" },
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              p: 2,
+              position: "relative",
+            }}
+          >
+            <img
+              src={selectedScreenshot}
+              alt="Screenshot Preview"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "80vh",
+                borderRadius: "10px",
+                objectFit: "contain",
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                cursor: "pointer",
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: "1.2rem",
+                p: 1,
+              }}
+              onClick={() => setOpenScreenshot(false)}
+            >
+              ✕
+            </Box>
+          </Box>
+        </Dialog>
+      )}
     </AdminLayout>
   );
 };

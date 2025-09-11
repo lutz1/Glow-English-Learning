@@ -149,6 +149,7 @@ const StartSession = () => {
           if (sessionId) {
             updateDoc(doc(db, "sessions", sessionId), {
               status: "awaiting_screenshot",
+              endTime: serverTimestamp(), // ✅ record endTime
             });
           }
         }
@@ -248,6 +249,7 @@ const StartSession = () => {
           (CLASS_SETTINGS[classType].rate / CLASS_SETTINGS[classType].duration) *
           (elapsedSeconds / 60)
         ).toFixed(2),
+        endTime: serverTimestamp(), // ✅ record endTime
       });
     }
   };
@@ -277,6 +279,7 @@ const StartSession = () => {
         actualDuration: elapsedSeconds,
         actualEarnings: CLASS_SETTINGS[classType].rate / 2,
         halfPay: true,
+        endTime: serverTimestamp(), // ✅ record endTime
       });
     }
   };
