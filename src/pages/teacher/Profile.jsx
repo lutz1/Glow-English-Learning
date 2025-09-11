@@ -21,7 +21,7 @@ import { db } from "../../firebase";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
   getStorage,
-  ref,
+  ref as storageRef,
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
@@ -55,6 +55,16 @@ const Profile = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tempQR, setTempQR] = useState(null);
 
+  // ✅ Helper: Convert download URL back to path
+  const getPathFromUrl = (url) => {
+    try {
+      const base = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
+      return base; // e.g. "gcashQR/uid/filename.jpg"
+    } catch {
+      return null;
+    }
+  };
+
   // Fetch teacher data
   useEffect(() => {
     const fetchTeacherData = async () => {
@@ -73,7 +83,7 @@ const Profile = () => {
             phone: data.phone || "",
             gender: data.gender || "",
             photoURL: data.photoURL || "",
-            gcashQR: data.gcashQR || "", // ✅ load saved QR directly
+            gcashQR: data.gcashQR || "",
           });
         }
       } catch (error) {
@@ -92,64 +102,75 @@ const Profile = () => {
   const handleChange = (e) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  // Handle QR Upload
+  // ✅ Handle QR Upload (with replace old QR logic)
   const handleUploadQR = async (e) => {
-  if (!teacher?.id) {
-    setSnackbar({
-      open: true,
-      message: "Teacher account not ready yet. Please save profile first.",
-      severity: "error",
-    });
-    return;
-  }
+    if (!teacher?.id) {
+      setSnackbar({
+        open: true,
+        message: "Teacher account not ready yet. Please save profile first.",
+        severity: "error",
+      });
+      return;
+    }
 
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-  setLoading(true);
-  setUploadProgress(0);
+    setLoading(true);
+    setUploadProgress(0);
 
-  try {
-    // ✅ unique filename
-    const uniqueName = `${Date.now()}_${file.name}`;
-    const storageRef = ref(storage, `gcashQR/${teacher.id}/${uniqueName}`);
-
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      },
-      (error) => {
-        console.error("Error uploading QR:", error);
-        setSnackbar({
-          open: true,
-          message: "Failed to upload GCash QR. " + (error.message || ""),
-          severity: "error",
-        });
-        setLoading(false);
-      },
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        setTempQR(downloadURL); // show preview before saving
-        setPreviewDialogOpen(true);
-        setLoading(false);
+    try {
+      // Delete old QR if exists
+      if (formData.gcashQR) {
+        const oldPath = getPathFromUrl(formData.gcashQR);
+        if (oldPath) {
+          await deleteObject(storageRef(storage, oldPath)).catch(() =>
+            console.warn("Old QR already removed or not found")
+          );
+        }
       }
-    );
-  } catch (error) {
-    console.error("Error uploading QR:", error);
-    setSnackbar({
-      open: true,
-      message: "Failed to upload GCash QR. " + (error.message || ""),
-      severity: "error",
-    });
-    setLoading(false);
-  }
-};
 
-  // Confirm Save QR after preview
+      // ✅ unique filename
+      const uniqueName = `${Date.now()}_${file.name}`;
+      const qrRef = storageRef(storage, `gcashQR/${teacher.id}/${uniqueName}`);
+
+      const uploadTask = uploadBytesResumable(qrRef, file);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+        },
+        (error) => {
+          console.error("Error uploading QR:", error);
+          setSnackbar({
+            open: true,
+            message: "Failed to upload GCash QR. " + (error.message || ""),
+            severity: "error",
+          });
+          setLoading(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          setTempQR(downloadURL);
+          setPreviewDialogOpen(true);
+          setLoading(false);
+        }
+      );
+    } catch (error) {
+      console.error("Error uploading QR:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to upload GCash QR. " + (error.message || ""),
+        severity: "error",
+      });
+      setLoading(false);
+    }
+  };
+
+  // ✅ Confirm Save QR after preview
   const confirmSaveQR = async () => {
     if (!teacher?.id || !tempQR) return;
     setLoading(true);
@@ -180,42 +201,43 @@ const Profile = () => {
     }
   };
 
-  // Handle Delete QR
-  // Handle Delete QR
-const handleDeleteQR = async () => {
-  if (!teacher?.id || !formData.gcashQR) return;
-  setLoading(true);
+  // ✅ Handle Delete QR
+  const handleDeleteQR = async () => {
+    if (!teacher?.id || !formData.gcashQR) return;
+    setLoading(true);
 
-  try {
-    // ✅ Create ref from the existing download URL
-    const fileRef = storageRef(storage, formData.gcashQR);
-    await deleteObject(fileRef);
+    try {
+      const path = getPathFromUrl(formData.gcashQR);
+      if (!path) throw new Error("Invalid file path");
 
-    // ✅ Clear from Firestore
-    const teacherRef = doc(db, "users", teacher.id);
-    await updateDoc(teacherRef, { gcashQR: "", updatedAt: serverTimestamp() });
+      const fileRef = storageRef(storage, path);
+      await deleteObject(fileRef);
 
-    setFormData((prev) => ({ ...prev, gcashQR: "" }));
+      // Clear Firestore field
+      const teacherRef = doc(db, "users", teacher.id);
+      await updateDoc(teacherRef, { gcashQR: "", updatedAt: serverTimestamp() });
 
-    setSnackbar({
-      open: true,
-      message: "GCash QR removed successfully!",
-      severity: "success",
-    });
-  } catch (error) {
-    console.error("Error removing QR:", error);
-    setSnackbar({
-      open: true,
-      message: "Failed to remove GCash QR.",
-      severity: "error",
-    });
-  } finally {
-    setDeleteDialogOpen(false);
-    setLoading(false);
-  }
-};
+      setFormData((prev) => ({ ...prev, gcashQR: "" }));
 
-  // Save profile updates
+      setSnackbar({
+        open: true,
+        message: "GCash QR removed successfully!",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error removing QR:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to remove GCash QR.",
+        severity: "error",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setLoading(false);
+    }
+  };
+
+  // ✅ Save profile updates
   const handleSave = async () => {
     if (!teacher?.id) {
       setSnackbar({
@@ -390,10 +412,7 @@ const handleDeleteQR = async () => {
 
             {loading && uploadProgress > 0 && uploadProgress < 100 && (
               <Box sx={{ mt: 2 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={uploadProgress}
-                />
+                <LinearProgress variant="determinate" value={uploadProgress} />
                 <Typography variant="body2" sx={{ mt: 1 }}>
                   Uploading... {Math.round(uploadProgress)}%
                 </Typography>
@@ -464,11 +483,7 @@ const handleDeleteQR = async () => {
           <Button onClick={() => setPreviewDialogOpen(false)} color="inherit">
             Cancel
           </Button>
-          <Button
-            onClick={confirmSaveQR}
-            variant="contained"
-            color="primary"
-          >
+          <Button onClick={confirmSaveQR} variant="contained" color="primary">
             Confirm & Save
           </Button>
         </DialogActions>
@@ -482,19 +497,15 @@ const handleDeleteQR = async () => {
         <DialogTitle>Remove GCash QR Code</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to remove your GCash QR code? This cannot
-            be undone.
+            Are you sure you want to remove your GCash QR code? This cannot be
+            undone.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)} color="inherit">
             Cancel
           </Button>
-          <Button
-            onClick={handleDeleteQR}
-            variant="contained"
-            color="error"
-          >
+          <Button onClick={handleDeleteQR} variant="contained" color="error">
             Remove
           </Button>
         </DialogActions>
