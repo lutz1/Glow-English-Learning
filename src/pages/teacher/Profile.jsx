@@ -94,51 +94,60 @@ const Profile = () => {
 
   // Handle QR Upload
   const handleUploadQR = async (e) => {
-    if (!teacher?.id) return;
-    const file = e.target.files[0];
-    if (!file) return;
+  if (!teacher?.id) {
+    setSnackbar({
+      open: true,
+      message: "Teacher account not ready yet. Please save profile first.",
+      severity: "error",
+    });
+    return;
+  }
 
-    setLoading(true);
-    setUploadProgress(0);
+  const file = e.target.files[0];
+  if (!file) return;
 
-    try {
-      // ✅ Always save in gcashQR/{uid}/gcas.jpg
-      const storageRef = ref(storage, `gcashQR/${teacher.id}/gcas.jpg`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+  setLoading(true);
+  setUploadProgress(0);
 
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          const progress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        },
-        (error) => {
-          console.error("Error uploading QR:", error);
-          setSnackbar({
-            open: true,
-            message: "Failed to upload GCash QR. " + (error.message || ""),
-            severity: "error",
-          });
-          setLoading(false);
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          setTempQR(downloadURL); // ✅ preview before saving
-          setPreviewDialogOpen(true);
-          setLoading(false);
-        }
-      );
-    } catch (error) {
-      console.error("Error uploading QR:", error);
-      setSnackbar({
-        open: true,
-        message: "Failed to upload GCash QR. " + (error.message || ""),
-        severity: "error",
-      });
-      setLoading(false);
-    }
-  };
+  try {
+    // ✅ unique filename
+    const uniqueName = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `gcashQR/${teacher.id}/${uniqueName}`);
+
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      "state_changed",
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      },
+      (error) => {
+        console.error("Error uploading QR:", error);
+        setSnackbar({
+          open: true,
+          message: "Failed to upload GCash QR. " + (error.message || ""),
+          severity: "error",
+        });
+        setLoading(false);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        setTempQR(downloadURL); // show preview before saving
+        setPreviewDialogOpen(true);
+        setLoading(false);
+      }
+    );
+  } catch (error) {
+    console.error("Error uploading QR:", error);
+    setSnackbar({
+      open: true,
+      message: "Failed to upload GCash QR. " + (error.message || ""),
+      severity: "error",
+    });
+    setLoading(false);
+  }
+};
 
   // Confirm Save QR after preview
   const confirmSaveQR = async () => {
@@ -172,36 +181,39 @@ const Profile = () => {
   };
 
   // Handle Delete QR
-  const handleDeleteQR = async () => {
-    if (!teacher?.id || !formData.gcashQR) return;
-    setLoading(true);
-    try {
-      // ✅ Delete from storage
-      const fileRef = ref(storage, `gcashQR/${teacher.id}/gcas.jpg`);
-      await deleteObject(fileRef);
+  // Handle Delete QR
+const handleDeleteQR = async () => {
+  if (!teacher?.id || !formData.gcashQR) return;
+  setLoading(true);
 
-      const teacherRef = doc(db, "users", teacher.id);
-      await updateDoc(teacherRef, { gcashQR: "", updatedAt: serverTimestamp() });
+  try {
+    // ✅ Create ref from the existing download URL
+    const fileRef = storageRef(storage, formData.gcashQR);
+    await deleteObject(fileRef);
 
-      setFormData((prev) => ({ ...prev, gcashQR: "" }));
+    // ✅ Clear from Firestore
+    const teacherRef = doc(db, "users", teacher.id);
+    await updateDoc(teacherRef, { gcashQR: "", updatedAt: serverTimestamp() });
 
-      setSnackbar({
-        open: true,
-        message: "GCash QR removed successfully!",
-        severity: "success",
-      });
-    } catch (error) {
-      console.error("Error removing QR:", error);
-      setSnackbar({
-        open: true,
-        message: "Failed to remove GCash QR.",
-        severity: "error",
-      });
-    } finally {
-      setDeleteDialogOpen(false);
-      setLoading(false);
-    }
-  };
+    setFormData((prev) => ({ ...prev, gcashQR: "" }));
+
+    setSnackbar({
+      open: true,
+      message: "GCash QR removed successfully!",
+      severity: "success",
+    });
+  } catch (error) {
+    console.error("Error removing QR:", error);
+    setSnackbar({
+      open: true,
+      message: "Failed to remove GCash QR.",
+      severity: "error",
+    });
+  } finally {
+    setDeleteDialogOpen(false);
+    setLoading(false);
+  }
+};
 
   // Save profile updates
   const handleSave = async () => {
