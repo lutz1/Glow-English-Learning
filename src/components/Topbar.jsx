@@ -70,16 +70,19 @@ const Topbar = () => {
 
     const unsubscribeNotif = onSnapshot(notifQuery, async (snapshot) => {
       const now = new Date();
-      const fiveDaysAgo = new Date(
-        now.getTime() - 5 * 24 * 60 * 60 * 1000
-      );
+      const oneHourAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000); // ⏱ Auto-remove after 1h
+      const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
 
       const validNotifs = [];
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         const createdAt = data.createdAt ? data.createdAt.toDate() : null;
 
-        if (createdAt && createdAt < fiveDaysAgo) {
+        // Auto-remove very old (5 days) or expired (1 hour for login)
+        if (
+          (createdAt && createdAt < fiveDaysAgo) ||
+          (data.type === "login" && createdAt && createdAt < oneHourAgo)
+        ) {
           try {
             await deleteDoc(doc(db, "notifications", docSnap.id));
           } catch (err) {
@@ -92,10 +95,14 @@ const Topbar = () => {
 
         validNotifs.push({
           id: docSnap.id,
-          message: data.teacherEmail
-            ? `Password reset requested`
-            : data.message || "New notification",
-          teacher: data.teacherEmail || "",
+          message:
+            data.type === "login"
+              ? `${data.teacherName || "A teacher"} is online`
+              : data.teacherEmail
+              ? `Password reset requested`
+              : data.message || "New notification",
+          teacher: data.teacherName || data.teacherEmail || "",
+          photo: data.teacherPhoto || "",
           type: data.type || "general",
           status: data.status || "pending",
           createdAt: createdAt || new Date(),
@@ -205,16 +212,31 @@ const Topbar = () => {
                 }}
                 sx={{
                   whiteSpace: "normal",
-                  alignItems: "flex-start",
-                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 1,
                   "&:hover": {
                     bgcolor: "rgba(255,255,255,0.08)",
                   },
                 }}
               >
+                <Avatar
+                  src={notif.photo || undefined}
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    bgcolor: "#3498db",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {!notif.photo &&
+                    (notif.teacher ? notif.teacher[0].toUpperCase() : "T")}
+                </Avatar>
                 <ListItemText
                   primary={notif.message}
-                  secondary={`${notif.teacher ? notif.teacher : ""} • ${notif.createdAt.toLocaleDateString()} ${notif.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                  secondary={`${notif.createdAt.toLocaleDateString()} ${notif.createdAt.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`}
                   primaryTypographyProps={{
                     sx: { fontWeight: "bold", fontSize: "0.9rem" },
                   }}
