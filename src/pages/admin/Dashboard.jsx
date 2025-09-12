@@ -262,40 +262,48 @@ const Dashboard = () => {
         textAlign: "center",
       }}
     >
-      <Typography variant="h6" gutterBottom>
-        Earnings Summary
+      <Typography
+        variant="h5"
+        sx={{
+          fontWeight: "bold",
+          mb: 2,
+          background: "linear-gradient(90deg, #64b5f6, #81c784, #ffb74d)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          animation: "pulse 2s infinite",
+        }}
+      >
+        📊 Coming Soon
       </Typography>
-      <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
-        📊 Coming Soon — We’ll get back to you soon with a
+
+      <Typography
+        variant="body2"
+        sx={{
+          color: "rgba(255,255,255,0.7)",
+          animation: "fadeInOut 3s infinite",
+        }}
+      >
+        We’ll get back to you soon with a
         <br />
         <strong>professional-level UI</strong> for analytics!
       </Typography>
-    
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={earningData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.2)" />
-                    <XAxis dataKey="teacherName" stroke="#fff" />
-                    <YAxis stroke="#fff" />
-                    <Tooltip
-                      formatter={(value, name) => [`₱${value.toFixed(2)}`, name]}
-                      contentStyle={{
-                        backgroundColor: "rgba(8, 8, 8, 0.88)",
-                        borderRadius: "10px",
-                        color: "#fff",
-                      }}
-                    />
-                    {Object.keys(classTypeColors).map((classType) => (
-                      <Bar
-                        key={classType}
-                        dataKey={classType}
-                        stackId="earnings"
-                        fill={classTypeColors[classType].bgcolor}
-                        radius={[6, 6, 0, 0]}
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-                </CardContent>
+
+      {/* Inline keyframes for animation */}
+      <style>
+        {`
+          @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes fadeInOut {
+            0% { opacity: 0.2; }
+            50% { opacity: 1; }
+            100% { opacity: 0.2; }
+          }
+        `}
+      </style>
+    </CardContent>
   </Card>
 </Grid>
               </CardContent>
