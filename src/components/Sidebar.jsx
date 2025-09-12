@@ -119,7 +119,13 @@ const Sidebar = () => {
           WebkitBackdropFilter: "blur(12px)",
           color: "#ecf0f1",
           borderRight: "1px solid rgba(255,255,255,0.1)",
-          overflowX: "hidden",
+
+          // 🔑 Fix scrollbar issue
+          height: "100vh",       // force sidebar to fit viewport height
+          overflowY: "auto",     // enable scroll only if necessary
+          overflowX: "hidden",   // prevent horizontal scroll
+          scrollbarWidth: "none", // Firefox hide scrollbar
+          "&::-webkit-scrollbar": { display: "none" }, // Chrome/Brave hide scrollbar
         },
       }}
     >
