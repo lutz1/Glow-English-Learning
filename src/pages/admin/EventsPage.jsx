@@ -27,6 +27,9 @@ import EventIcon from "@mui/icons-material/Event";
 import SchoolIcon from "@mui/icons-material/School";
 import WorkIcon from "@mui/icons-material/Work";
 
+// animation
+import { motion } from "framer-motion";
+
 const eventTypeColors = {
   Meeting: "#3498db",
   Class: "#2ecc71",
@@ -46,13 +49,17 @@ const EventsPage = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: "", start: "", end: "", type: "Other" });
 
-  // Fetch events from Firestore
+  // 🚨 disable toggle
+  const [disabled, setDisabled] = useState(true);
+
+  // Fetch events
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "events"), (snapshot) => {
       const eventsData = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         const start = data.start && data.start.toDate ? data.start.toDate() : new Date(data.start);
-        const end = data.end && data.end.toDate ? data.end.toDate() : data.end ? new Date(data.end) : start;
+        const end =
+          data.end && data.end.toDate ? data.end.toDate() : data.end ? new Date(data.end) : start;
         return {
           id: docSnap.id,
           title: data.title,
@@ -81,7 +88,7 @@ const EventsPage = () => {
     }
   };
 
-  // Date selection for new event
+  // Date selection
   const handleDateSelect = (selectInfo) => {
     setNewEvent({
       ...newEvent,
@@ -91,11 +98,10 @@ const EventsPage = () => {
     setOpenDialog(true);
   };
 
-  // Custom event rendering to include icons + tooltip
+  // Custom event rendering
   const renderEventContent = (eventInfo) => {
     const type = eventInfo.event.extendedProps.type || "Other";
     const Icon = eventTypeIcons[type];
-
     const startTime = eventInfo.event.start
       ? eventInfo.event.start.toLocaleString([], { dateStyle: "short", timeStyle: "short" })
       : "";
@@ -113,10 +119,44 @@ const EventsPage = () => {
     );
   };
 
+  // Building animation (grid blocks)
+  const BuildingAnimation = () => {
+    const blocks = Array.from({ length: 9 });
+    return (
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 30px)",
+          gap: "6px",
+          mb: 2,
+        }}
+      >
+        {blocks.map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{
+              duration: 0.4,
+              delay: i * 0.2,
+              repeat: Infinity,
+              repeatType: "reverse",
+            }}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 6,
+              backgroundColor: i % 2 === 0 ? "#3498db" : "#2ecc71",
+            }}
+          />
+        ))}
+      </Box>
+    );
+  };
+
   return (
     <Box sx={{ display: "flex" }}>
       <Sidebar />
-
       <Box sx={{ flexGrow: 1, minHeight: "100vh", bgcolor: "#f4f6f8" }}>
         <Topbar />
         <Box sx={{ p: 3, mt: 8 }}>
@@ -124,31 +164,62 @@ const EventsPage = () => {
             📅 Events Calendar
           </Typography>
 
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-            initialView="dayGridMonth"
-            headerToolbar={{
-              left: "prev,next today",
-              center: "title",
-              right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
-            }}
-            editable={true}
-            selectable={true}
-            selectMirror={true}
-            dayMaxEvents={true}
-            select={handleDateSelect}
-            events={events.map((evt) => ({
-              ...evt,
-              id: evt.id,
-              backgroundColor: eventTypeColors[evt.type] || eventTypeColors["Other"],
-              borderColor: eventTypeColors[evt.type] || eventTypeColors["Other"],
-            }))}
-            eventClick={handleEventClick}
-            eventContent={renderEventContent}
-            height="auto"
-            slotMinTime="08:00:00"
-            slotMaxTime="20:00:00"
-          />
+          {/* Calendar Wrapper with Overlay */}
+          <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden" }}>
+            <FullCalendar
+              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+              initialView="dayGridMonth"
+              headerToolbar={{
+                left: "prev,next today",
+                center: "title",
+                right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+              }}
+              editable={!disabled}
+              selectable={!disabled}
+              selectMirror={true}
+              dayMaxEvents={true}
+              select={handleDateSelect}
+              events={events.map((evt) => ({
+                ...evt,
+                id: evt.id,
+                backgroundColor: eventTypeColors[evt.type] || eventTypeColors["Other"],
+                borderColor: eventTypeColors[evt.type] || eventTypeColors["Other"],
+              }))}
+              eventClick={handleEventClick}
+              eventContent={renderEventContent}
+              height="auto"
+              slotMinTime="08:00:00"
+              slotMaxTime="20:00:00"
+            />
+
+            {/* Overlay */}
+            {disabled && (
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  bgcolor: "rgba(255,255,255,0.85)",
+                  backdropFilter: "blur(6px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "column",
+                  zIndex: 10,
+                }}
+              >
+                <BuildingAnimation />
+                <Typography variant="h6" sx={{ fontWeight: 600, color: "#2c3e50" }}>
+                  Building Calendar...
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#7f8c8d", mt: 1 }}>
+                  This feature is coming soon
+                </Typography>
+              </Box>
+            )}
+          </Box>
 
           {/* Add Event Dialog */}
           <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
