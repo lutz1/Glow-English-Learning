@@ -249,6 +249,28 @@ const Dashboard = () => {
                     </Button>
                   </ButtonGroup>
                 </Box>
+                {/* CHART (Disabled for now) */}
+<Grid item xs={12} md={8}>
+  <Card sx={{ ...glassCard, height: 450 }}>
+    <CardContent
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100%",
+        textAlign: "center",
+      }}
+    >
+      <Typography variant="h6" gutterBottom>
+        Earnings Summary
+      </Typography>
+      <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+        📊 Coming Soon — We’ll get back to you soon with a
+        <br />
+        <strong>professional-level UI</strong> for analytics!
+      </Typography>
+    
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={earningData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.2)" />
@@ -273,6 +295,9 @@ const Dashboard = () => {
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
+                </CardContent>
+  </Card>
+</Grid>
               </CardContent>
             </Card>
           </Grid>
