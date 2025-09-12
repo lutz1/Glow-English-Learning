@@ -249,7 +249,7 @@ const Dashboard = () => {
                     </Button>
                   </ButtonGroup>
                 </Box>
-                {/* CHART (Disabled for now) */}
+               {/* CHART (Disabled with animation placeholder) */}
 <Grid item xs={12} md={8}>
   <Card sx={{ ...glassCard, height: 450 }}>
     <CardContent
