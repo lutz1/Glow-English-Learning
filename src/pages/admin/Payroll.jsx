@@ -30,10 +30,13 @@ import {
   orderBy,
   query,
   doc,
+  addDoc,
   deleteDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import AdminLayout from "../../layout/AdminLayout";
+import { History } from "@mui/icons-material";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -53,6 +56,20 @@ const Payroll = () => {
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const [qrPreviewImg, setQrPreviewImg] = useState(null);
   const videoRef = useRef(null); // for native video element
+  const [payrollHistory, setPayrollHistory] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  const fetchPayrollHistory = async () => {
+    try {
+      const snap = await getDocs(
+        query(collection(db, "payrollHistory"), orderBy("createdAt", "desc"))
+      );
+      setPayrollHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error("Error fetching payroll history:", err);
+    }
+  };
 
   // fetch teachers
   const fetchTeachers = async () => {
@@ -87,9 +104,10 @@ const Payroll = () => {
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
     fetchTeachers();
     fetchSessions();
+    fetchPayrollHistory();
   }, []);
 
   // Camera start/stop when dialog opens
@@ -121,6 +139,7 @@ const Payroll = () => {
         cameraStream.getTracks().forEach((t) => t.stop());
       }
     };
+
   }, [teacherViewOpen]);
 
   const filterByDate = (list, from, to) => {
@@ -139,35 +158,41 @@ const Payroll = () => {
   };
 
   const getTeacherSummary = () => {
-    const summary = {};
-    sessions.forEach((s) => {
-      const teacherInfo = teacherMap[s.teacherId] || {};
-      const name = teacherInfo.name || "Unknown";
-      const email = teacherInfo.email || "N/A";
+  const summary = {};
+  sessions.forEach((s) => {
+    // ❌ Skip sessions that are already marked as "paid"
+    if (s.status === "paid") return;
 
-      if (!summary[s.teacherId]) {
-        summary[s.teacherId] = {
-          teacherId: s.teacherId,
-          fullName: name,
-          email,
-          photoURL: teacherInfo.photoURL || "",
-          totalEarnings: 0,
-          paid: true,
-        };
-      }
-      summary[s.teacherId].totalEarnings += s.totalEarnings || 0;
-      if (s.status !== "completed") {
-        summary[s.teacherId].paid = false;
-      }
-    });
-    return summary;
-  };
+    const teacherInfo = teacherMap[s.teacherId] || {};
+    const name = teacherInfo.name || "Unknown";
+    const email = teacherInfo.email || "N/A";
+    const tid = s.teacherId || "unknown";
+
+    if (!summary[tid]) {
+      summary[tid] = {
+        teacherId: tid,
+        fullName: name,
+        email,
+        photoURL: teacherInfo.photoURL || "",
+        totalEarnings: 0,
+        paid: false, // these are unpaid sessions
+      };
+    }
+
+    summary[tid].totalEarnings += s.totalEarnings || 0;
+  });
+
+  return summary;
+};
 
   const viewTeacherSessions = (teacherName, teacherId) => {
+    const filtered = sessions.filter((s) => s.teacherId === teacherId);
+    const allPaid = filtered.length > 0 ? filtered.every((s) => s.status === "paid") : false;
+    setIsPreviewMode(allPaid);
     setSelectedTeacher(teacherName);
     setSelectedTeacherId(teacherId);
-    const filtered = sessions.filter((s) => s.teacherId === teacherId);
     setTeacherSessions(filtered);
+    setCapturedReceipt(null); // reset any previous capture for new teacher view
     setTeacherViewOpen(true);
   };
 
@@ -188,7 +213,7 @@ const Payroll = () => {
       for (const docSnap of snap.docs) {
         await deleteDoc(doc(db, "sessions", docSnap.id));
       }
-      fetchSessions();
+      await fetchSessions();
       setConfirmOpen(false);
     } catch (err) {
       console.error("Error deleting sessions:", err);
@@ -239,27 +264,27 @@ const Payroll = () => {
   // normalize input which may be: dataURL (png/jpeg) or http(s) url
   // returns JPEG dataURL
   // 🔄 Normalize ANY base64 image into JPEG base64 (safe for jsPDF)
-const normalizeToJpegDataUrl = (dataUrl) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      try {
-        const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-        resolve(jpegDataUrl);
-      } catch (err) {
-        reject(err);
-      }
-    };
-    img.onerror = reject;
-    img.src = dataUrl;
-  });
-};
+  const normalizeToJpegDataUrl = (dataUrl) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        try {
+          const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+          resolve(jpegDataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  };
 
   // -----------------------
   // Capture functions
@@ -321,94 +346,172 @@ const normalizeToJpegDataUrl = (dataUrl) => {
     reader.readAsDataURL(file);
   };
 
-  // -----------------------
-  // PDF generation
-  // -----------------------
+  // ✅ Utility: Convert any image URL to JPEG base64
+  const loadImageAsBase64 = async (url) => {
+    // Accepts a relative path or remote URL. Returns a JPEG data URL.
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch image: " + url);
+    const blob = await response.blob();
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.9)); // force JPEG
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(blob);
+    });
+  };
+
+  // ✅ Embed logo directly (replace with your real Base64 PNG/JPEG if you prefer)
+  const EMBEDDED_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."; // truncated
+
   const generateTeacherPDF = async () => {
     if (!selectedTeacherId) {
       alert("No teacher selected");
       return;
     }
     const teacher = teacherMap[selectedTeacherId];
-    const doc = new jsPDF();
+    const pdfDoc = new jsPDF();
 
-    doc.setFontSize(16);
-    doc.text(`Payroll Report - ${teacher?.name || "Teacher"}`, 20, 20);
-
-    const totalAmount = filterByDate(teacherSessions, dateFrom, dateTo)
-      .reduce((sum, s) => sum + (s.totalEarnings || 0), 0)
-      .toFixed(2);
-    doc.setFontSize(12);
-    doc.text(`Total Amount: ₱${totalAmount}`, 20, 30);
-
-    // QR: teacher.gcashQR might be a dataURL or URL. Convert to base64 if needed and detect type.
-    if (teacher?.gcashQR) {
+    try {
+      // --------------------------
+      // Logo
+      // --------------------------
       try {
-        let qrData = teacher.gcashQR;
-        if (typeof qrData === "string" && qrData.startsWith("http")) {
-          qrData = await urlToDataURL(qrData); // could be PNG or JPEG
-        }
-        // we can add QR as PNG if it's png, else JPEG
-        if (qrData.startsWith("data:image/png")) {
-          doc.text("GCash QR:", 20, 40);
-          doc.addImage(qrData, "PNG", 20, 45, 60, 60);
-        } else {
-          // force to jpeg just in case
-          const qrJpeg = await normalizeToJpegDataUrl(qrData);
-          doc.text("GCash QR:", 20, 40);
-          doc.addImage(qrJpeg, "JPEG", 20, 45, 60, 60);
-        }
+        const logoPath = `${process.env.PUBLIC_URL}/logo.jpg`;
+        const logoBase64 = await loadImageAsBase64(logoPath);
+        pdfDoc.addImage(logoBase64, "JPEG", 15, 10, 20, 20);
       } catch (err) {
-        console.warn("Failed to attach QR to PDF:", err);
+        // fallback to embedded (if available) or skip silently
+        try {
+          if (EMBEDDED_LOGO) pdfDoc.addImage(EMBEDDED_LOGO, "PNG", 15, 10, 20, 20);
+        } catch (e) {
+          // ignore
+        }
       }
-    }
 
-    // Receipt: must exist (you enforced earlier), convert/normalize to jpeg dataurl and insert
-    if (capturedReceipt) {
-      try {
-        console.log("capturedReceipt start:", capturedReceipt.substring(0, 30));
-        const receiptJpeg = await normalizeToJpegDataUrl(capturedReceipt);
-        // place receipt on PDF (scale to fit — maintain aspect)
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const maxImgWidth = 100; // mm
-        const maxImgHeight = 120;
-        // Insert with specified size (you may adjust)
-        doc.text("Receipt Proof:", 100, 50);
-        doc.addImage(receiptJpeg, "JPEG", 100, 55, 60, 60);
-      } catch (err) {
-        console.error("Failed to attach receipt to PDF:", err);
-        alert("Failed to add receipt to PDF. Check console for details.");
-        return;
+      // Title + Period
+      pdfDoc.setFontSize(18).setFont("helvetica", "bold");
+      pdfDoc.text("Glow-English Learning", 40, 20);
+      const periodText = `Period: ${dateFrom || "..."} to ${dateTo || "..."}`;
+      pdfDoc.setFontSize(11).setFont("helvetica", "normal");
+      pdfDoc.text(periodText, pdfDoc.internal.pageSize.getWidth() - 20, 20, { align: "right" });
+
+      // --------------------------
+      // Teacher Profile
+      // --------------------------
+      if (teacher?.photoURL) {
+        try {
+          const photoBase64 = await loadImageAsBase64(teacher.photoURL);
+          pdfDoc.addImage(photoBase64, "JPEG", 15, 35, 25, 25);
+        } catch (err) {
+          console.warn("Teacher photo failed to load:", err);
+        }
       }
-    }
 
-    doc.save(`${teacher?.name || "teacher"}_payroll.pdf`);
-    // ✅ After generating payroll, mark sessions as paid
-  try {
-    const q = query(
-      collection(db, "sessions"),
-      where("teacherId", "==", selectedTeacherId)
-    );
-    const snap = await getDocs(q);
-    for (const docSnap of snap.docs) {
-      await updateDoc(doc(db, "sessions", docSnap.id), {
-        status: "paid",
+      pdfDoc.setFontSize(13).setFont("helvetica", "bold");
+      pdfDoc.text(`Teacher: ${teacher?.name || "Unknown"}`, 45, 42);
+      pdfDoc.setFont("helvetica", "normal").setFontSize(11);
+      pdfDoc.text(`Email: ${teacher?.email || "N/A"}`, 45, 50);
+
+      // --------------------------
+      // Sessions Table
+      // --------------------------
+      const filteredSessions = filterByDate(teacherSessions, dateFrom, dateTo);
+      const tableData = filteredSessions.map((s, i) => [
+        i + 1,
+        s.classType || "N/A",
+        s.startTime ? new Date(s.startTime.seconds * 1000).toLocaleString() : "N/A",
+        `${s.actualDuration || 0} mins`,
+        `₱${(s.totalEarnings || 0).toFixed(2)}`,
+        s.status || "N/A",
+      ]);
+
+      autoTable(pdfDoc, {
+        startY: 70,
+        head: [["#", "Class Type", "Date/Time", "Duration", "Earnings", "Status"]],
+        body: tableData,
+        theme: "grid",
       });
-    }
 
-    // refresh list + close dialog
-    await fetchSessions();
-    setTeacherViewOpen(false);
-  } catch (err) {
-    console.error("Error marking sessions as paid:", err);
-    alert("⚠️ Payroll PDF saved, but failed to update status.");
-  }
-};
+      // --------------------------
+      // Totals
+      // --------------------------
+      const totalAmount = filteredSessions.reduce((sum, s) => sum + (s.totalEarnings || 0), 0).toFixed(2);
+      pdfDoc.setFontSize(13).setFont("helvetica", "bold");
+      const totalsY = (pdfDoc.lastAutoTable && pdfDoc.lastAutoTable.finalY) || 90;
+      pdfDoc.text(`Total Amount: ₱${totalAmount}`, 15, totalsY + 10);
+
+      // --------------------------
+      // Receipt
+      // --------------------------
+      if (capturedReceipt) {
+        try {
+          const receiptJpeg = await normalizeToJpegDataUrl(capturedReceipt);
+          const y = (pdfDoc.lastAutoTable && pdfDoc.lastAutoTable.finalY) ? pdfDoc.lastAutoTable.finalY + 20 : totalsY + 30;
+          pdfDoc.text("Receipt Proof:", 15, y);
+          // keep image reasonably sized
+          pdfDoc.addImage(receiptJpeg, "JPEG", 55, y + 5, 100, 100);
+        } catch (err) {
+          console.error("Failed to attach receipt:", err);
+        }
+      }
+
+      // Save PDF
+      pdfDoc.save(`${teacher?.name || "teacher"}_payroll.pdf`);
+
+      // --------------------------
+      // Save Payroll History
+      // --------------------------
+              const payrollData = {
+              teacherId: selectedTeacherId || "",
+              teacherName: teacher?.name || "Unknown",
+              email: teacher?.email || "",
+              periodFrom: dateFrom || "",
+              periodTo: dateTo || "",
+              totalAmount: parseFloat(totalAmount) || 0,
+              receipt: capturedReceipt || null,
+              createdAt: new Date(),
+              sessions: filteredSessions.map((s) => ({
+                id: s.id || "",
+                classType: s.classType || "N/A",
+                startTime: s.startTime || null,
+                actualDuration: s.actualDuration || 0,
+                totalEarnings: s.totalEarnings || 0,
+              })),
+            };
+
+console.log("Saving payrollData:", payrollData);
+await addDoc(collection(db, "payrollHistory"), payrollData);
+
+      // --------------------------
+      // Mark ONLY filtered sessions as paid
+      // --------------------------
+      for (const s of filteredSessions) {
+        await updateDoc(doc(db, "sessions", s.id), { status: "paid" });
+      }
+
+      await fetchSessions();
+      await fetchPayrollHistory();
+      setTeacherViewOpen(false);
+      setCapturedReceipt(null);
+    } catch (err) {
+      console.error("Error in PDF generation:", err);
+      alert("⚠️ Payroll PDF saved, but failed in some parts.");
+    }
+  };
 
   // Summary data & totals
   const summaryData = getTeacherSummary();
   const totalPayrollPaid = Object.values(summaryData).reduce(
-    (sum, d) => sum + d.totalEarnings,
+    (sum, d) => sum + (d.totalEarnings || 0),
     0
   );
   const numberPendingPayroll = Object.values(summaryData).filter((d) => !d.paid).length;
@@ -468,6 +571,14 @@ const normalizeToJpegDataUrl = (dataUrl) => {
             </Card>
           </Grid>
         </Grid>
+        <Button
+          variant="contained"
+          startIcon={<History />}
+          sx={{ mb: 3, borderRadius: "12px", bgcolor: "#546e7a" }}
+          onClick={() => setHistoryOpen(true)}
+        >
+          Paid Payroll History
+        </Button>
 
         {/* Teacher Summary */}
         <Card sx={glassCard}>
@@ -525,7 +636,7 @@ const normalizeToJpegDataUrl = (dataUrl) => {
                     </Box>
 
                     <Typography sx={{ fontWeight: "bold", color: "#81c784" }}>
-                      ₱{data.totalEarnings.toFixed(2)}
+                      ₱{(data.totalEarnings || 0).toFixed(2)}
                     </Typography>
 
                     <Chip label={data.paid ? "Paid" : "Pending"} color={data.paid ? "success" : "warning"} size="small" />
@@ -806,24 +917,30 @@ const normalizeToJpegDataUrl = (dataUrl) => {
                   <input type="file" hidden accept="image/*" onChange={handleFileUpload} />
                 </Button>
               </Box>
+
+              {/* Generate button inside the same card so QR + Camera + Generate look cohesive */}
+              <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  sx={{ borderRadius: "12px", px: 4, py: 1.5, fontWeight: "bold" }}
+                  onClick={async () => {
+                    if (!capturedReceipt) {
+                      alert("⚠️ Please capture or upload a GCash receipt before generating payroll.");
+                      return;
+                    }
+                    await generateTeacherPDF(); // this now marks sessions as paid + closes dialog
+                  }}
+                >
+                  Generate Payroll
+                </Button>
+              </Box>
             </Card>
           </DialogContent>
 
-          {/* Actions */}
           <DialogActions>
-            <Button
-              variant="contained"
-              color="primary"
-              sx={{ borderRadius: "12px", px: 4, py: 1.5, fontWeight: "bold" }}
-              onClick={async () => {
-                if (!capturedReceipt) {
-                  alert("⚠️ Please capture or upload a GCash receipt before generating payroll.");
-                  return;
-                }
-                await generateTeacherPDF(); // this now marks sessions as paid + closes dialog
-              }}
-            >
-              Generate Payroll
+            <Button onClick={() => setTeacherViewOpen(false)} variant="contained" sx={{ borderRadius: "12px" }}>
+              Close
             </Button>
           </DialogActions>
         </Dialog>
@@ -877,6 +994,99 @@ const normalizeToJpegDataUrl = (dataUrl) => {
 
           <DialogActions>
             <Button onClick={() => setQrPreviewOpen(false)} variant="contained">
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Screenshot Preview Dialog */}
+        <Dialog
+          open={Boolean(selectedScreenshot)}
+          onClose={() => setSelectedScreenshot(null)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: "20px",
+              p: 2,
+              textAlign: "center",
+            },
+          }}
+        >
+          <DialogTitle sx={{ fontWeight: "bold", color: "#64b5f6" }}>
+            Session Screenshot
+          </DialogTitle>
+
+          <DialogContent>
+            {selectedScreenshot ? (
+              <img
+                src={selectedScreenshot}
+                alt="Session Screenshot"
+                style={{
+                  width: "100%",
+                  maxWidth: "700px",
+                  borderRadius: "16px",
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+                }}
+              />
+            ) : (
+              <Typography>No screenshot available</Typography>
+            )}
+          </DialogContent>
+
+          <DialogActions>
+            <Button
+              onClick={() => setSelectedScreenshot(null)}
+              variant="contained"
+              sx={{ borderRadius: "12px" }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ fontWeight: "bold", color: "#64b5f6" }}>
+            Paid Payroll History
+          </DialogTitle>
+          <DialogContent dividers>
+            <List>
+            {payrollHistory.length === 0 && (
+              <Typography>No payroll history found.</Typography>
+            )}
+            {payrollHistory.map((h) => (
+              <Card key={h.id} sx={{ mb: 2, p: 2, borderRadius: "12px" }}>
+                <Typography fontWeight="bold">{h.teacherName}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {h.email}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Period: {h.periodFrom} → {h.periodTo}
+                </Typography>
+                <Typography fontWeight="bold" color="success.main">
+                  ₱{(h.totalAmount || 0).toFixed(2)}
+                </Typography>
+
+                {/* ✅ Use Typography instead of raw <p> */}
+                <Typography variant="caption" color="text.secondary">
+                  Generated on: {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString() : ""}
+                </Typography>
+
+                <List sx={{ mt: 1 }}>
+                  {h.sessions.map((s) => (
+                    <ListItem key={s.id} sx={{ py: 0.5 }}>
+                      <Typography variant="body2">
+                        {s.classType} | {s.actualDuration} mins | ₱{s.totalEarnings}
+                      </Typography>
+                    </ListItem>
+                  ))}
+                </List>
+              </Card>
+            ))}
+          </List>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setHistoryOpen(false)} variant="contained">
               Close
             </Button>
           </DialogActions>
