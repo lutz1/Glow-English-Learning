@@ -229,86 +229,120 @@ const Dashboard = () => {
           </Grid>
 
           {/* CHART */}
-          <Grid item xs={12} md={8}>
-            <Card sx={{ ...glassCard, height: 450 }}>
-              <CardContent>
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-                  <Typography variant="h6">Earnings Summary</Typography>
-                  <ButtonGroup size="small">
-                    <Button
-                      variant={period === "weekly" ? "contained" : "outlined"}
-                      onClick={() => setPeriod("weekly")}
-                    >
-                      Weekly
-                    </Button>
-                    <Button
-                      variant={period === "monthly" ? "contained" : "outlined"}
-                      onClick={() => setPeriod("monthly")}
-                    >
-                      Monthly
-                    </Button>
-                  </ButtonGroup>
-                </Box>
-               {/* CHART (Disabled with animation placeholder) */}
+          {/* CHART */}
 <Grid item xs={12} md={8}>
-  <Card sx={{ ...glassCard, height: 450 }}>
-    <CardContent
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100%",
-        textAlign: "center",
-      }}
-    >
-      <Typography
-        variant="h5"
+  <Card sx={{ ...glassCard, height: 450, position: "relative", overflow: "hidden" }}>
+    <CardContent>
+      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+        <Typography variant="h6">Earnings Summary</Typography>
+        <ButtonGroup size="small">
+          <Button
+            variant={period === "weekly" ? "contained" : "outlined"}
+            onClick={() => setPeriod("weekly")}
+          >
+            Weekly
+          </Button>
+          <Button
+            variant={period === "monthly" ? "contained" : "outlined"}
+            onClick={() => setPeriod("monthly")}
+          >
+            Monthly
+          </Button>
+        </ButtonGroup>
+      </Box>
+
+      {/* Chart stays here (hidden behind overlay) */}
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={earningData}>
+          {/* ...chart content */}
+        </BarChart>
+      </ResponsiveContainer>
+
+      {/* Overlay for Coming Soon */}
+      <Box
         sx={{
-          fontWeight: "bold",
-          mb: 2,
-          background: "linear-gradient(90deg, #64b5f6, #81c784, #ffb74d)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          animation: "pulse 2s infinite",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          bgcolor: "rgba(0,0,0,0.75)",
+          zIndex: 10,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          backdropFilter: "blur(4px)",
+          color: "#fff",
+          textAlign: "center",
         }}
       >
-        📊 Coming Soon
-      </Typography>
+        {/* Animated Builder */}
+        <div className="builder-animation">
+          <span className="emoji">👷‍♂️</span>
+          <span className="emoji">🔨</span>
+        </div>
 
-      <Typography
-        variant="body2"
-        sx={{
-          color: "rgba(255,255,255,0.7)",
-          animation: "fadeInOut 3s infinite",
-        }}
-      >
-        We’ll get back to you soon with a
-        <br />
-        <strong>professional-level UI</strong> for analytics!
-      </Typography>
+        <Typography
+          variant="h5"
+          sx={{
+            fontWeight: "bold",
+            mt: 2,
+            mb: 1,
+            background: "linear-gradient(90deg, #64b5f6, #81c784, #ffb74d)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Feature Coming Soon
+        </Typography>
 
-      {/* Inline keyframes for animation */}
-      <style>
-        {`
-          @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.8; }
-            100% { transform: scale(1); opacity: 1; }
-          }
-          @keyframes fadeInOut {
-            0% { opacity: 0.2; }
-            50% { opacity: 1; }
-            100% { opacity: 0.2; }
-          }
-        `}
-      </style>
+        <Typography
+          variant="body2"
+          sx={{ color: "rgba(255,255,255,0.7)" }}
+        >
+          We’re crafting advanced analytics for you.<br />
+          Stay tuned for updates 🚀
+        </Typography>
+      </Box>
     </CardContent>
   </Card>
+
+  {/* Animations */}
+  <style>
+    {`
+      .builder-animation {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        gap: 0.5rem;
+      }
+
+      .builder-animation .emoji {
+        display: inline-block;
+        animation: bounce 1.5s infinite;
+      }
+
+      .builder-animation .emoji:nth-child(2) {
+        animation: hammer 1.2s infinite;
+      }
+
+      @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+      }
+
+      @keyframes hammer {
+        0% { transform: rotate(0deg); }
+        25% { transform: rotate(-30deg); }
+        50% { transform: rotate(0deg); }
+        75% { transform: rotate(-30deg); }
+        100% { transform: rotate(0deg); }
+      }
+    `}
+  </style>
 </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
 
           {/* TOP TEACHERS */}
           <Grid item xs={12} md={4}>
