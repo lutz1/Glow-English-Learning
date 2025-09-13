@@ -57,6 +57,13 @@ const Dashboard = () => {
   // For screenshot lightbox
   const [openScreenshot, setOpenScreenshot] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+   // 🕒 Clock state
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const updateChartData = (sessionsArray) => {
     const teacherData = {};
@@ -217,11 +224,16 @@ const getCurrentHalfMonthRange = () => {
         }}
       >
         {/* HEADER */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold">
-            Admin Dashboard Overview
-          </Typography>
-        </Box>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+  <Typography variant="h4" fontWeight="bold">
+    Admin Dashboard Overview
+  </Typography>
+
+  {/* 🕒 Live Clock */}
+  <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
+    {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+  </Typography>
+</Box>
 
         <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.2)" }} />
 
