@@ -53,7 +53,7 @@ const Dashboard = () => {
   const [topTeachers, setTopTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("weekly");
-
+  const [halfMonthRange, setHalfMonthRange] = useState({ start: null, end: null, label: "" });
   // For screenshot lightbox
   const [openScreenshot, setOpenScreenshot] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
@@ -97,8 +97,33 @@ const Dashboard = () => {
     return () => unsubUsers();
   }, []);
 
+const getCurrentHalfMonthRange = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  if (now.getDate() <= 15) {
+    // First half
+    return {
+      start: new Date(year, month, 1, 0, 0, 0),
+      end: new Date(year, month, 15, 23, 59, 59),
+      label: "1st – 15th",
+    };
+  } else {
+    // Second half
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return {
+      start: new Date(year, month, 16, 0, 0, 0),
+      end: new Date(year, month, lastDay, 23, 59, 59),
+      label: `16th – ${lastDay}th`,
+    };
+  }
+};
+
   // Load sessions
   useEffect(() => {
+    const range = getCurrentHalfMonthRange();
+    setHalfMonthRange(range);
     const unsubSessions = onSnapshot(collection(db, "sessions"), (snapshot) => {
       const allSessions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 
@@ -116,31 +141,41 @@ const Dashboard = () => {
           .reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
       );
 
-      const earningsByTeacher = {};
-      allSessions
-        .filter((s) => s.status === "completed")
-        .forEach((s) => {
-          earningsByTeacher[s.teacherId] =
-            (earningsByTeacher[s.teacherId] || 0) + (s.totalEarnings || 0);
-        });
+       // ✅ Filter only sessions completed in the current half-month
+    const { start, end } = getCurrentHalfMonthRange();
 
-      const ranked = Object.entries(earningsByTeacher)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([id, earnings]) => ({
-          id,
-          earnings,
-          name: teachersMap[id]?.name || "Unknown",
-          photoURL: teachersMap[id]?.photoURL || "",
-        }));
+    const currentHalfSessions = allSessions.filter(
+      (s) =>
+        s.status === "completed" &&
+        s.endTime?.toDate &&
+        s.endTime.toDate() >= start &&
+        s.endTime.toDate() <= end
+    );
 
-      setTopTeachers(ranked);
-      updateChartData(allSessions);
-      setLoading(false);
+    // Calculate earnings by teacher
+    const earningsByTeacher = {};
+    currentHalfSessions.forEach((s) => {
+      earningsByTeacher[s.teacherId] =
+        (earningsByTeacher[s.teacherId] || 0) + (s.totalEarnings || 0);
     });
 
-    return () => unsubSessions();
-  }, [period, teachersMap]);
+    const ranked = Object.entries(earningsByTeacher)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, earnings]) => ({
+        id,
+        earnings,
+        name: teachersMap[id]?.name || "Unknown",
+        photoURL: teachersMap[id]?.photoURL || "",
+      }));
+
+    setTopTeachers(ranked);
+    updateChartData(allSessions);
+    setLoading(false);
+  });
+
+  return () => unsubSessions();
+}, []);
 
   if (loading)
     return (
@@ -348,9 +383,9 @@ const Dashboard = () => {
           <Grid item xs={12} md={4}>
             <Card sx={{ ...glassCard, height: 450 }}>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}>
-                  🌟 Top Teachers
-                </Typography>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}>
+                🌟 Top Teachers {halfMonthRange.label && `(${halfMonthRange.label})`}
+              </Typography>
                 <List>
                   {topTeachers.map((t, idx) => (
                     <React.Fragment key={t.id}>
