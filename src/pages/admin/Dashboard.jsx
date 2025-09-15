@@ -452,119 +452,119 @@ const Dashboard = () => {
 
           {/* TOP TEACHERS + date range + export PDF */}
           <Grid item xs={12} md={4}>
-            <Card sx={{ ...glassCard, minHeight: 250, height: "100%" }}>
-              <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                  <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
-                    🌟 Top Teachers
-                  </Typography>
+  <Card sx={{ ...glassCard, minHeight: 250, height: "100%" }}>
+    <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+        <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
+          🌟 Top Teachers
+        </Typography>
 
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                    <Tooltip title="Export Top Teachers (PDF)">
-                      <IconButton size="small" onClick={exportTopTeachersToPDF} sx={{ color: "#fff" }}>
-                        <PictureAsPdfIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+          <Tooltip title="Export Top Teachers (PDF)">
+            <IconButton size="small" onClick={exportTopTeachersToPDF} sx={{ color: "#fff" }}>
+              <PictureAsPdfIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
 
-                {/* Date range inputs */}
-                <Box sx={{ display: "flex", gap: 1, mb: 2, alignItems: "center" }}>
-                  <TextField
-                    label="Start"
-                    type="date"
-                    size="small"
-                    InputLabelProps={{ shrink: true }}
-                    value={dateRange.start || ""}
-                    onChange={handleDateChange("start")}
-                    sx={{ bgcolor: "rgba(255,255,255,0.03)", borderRadius: 1 }}
-                  />
-                  <TextField
-                    label="End"
-                    type="date"
-                    size="small"
-                    InputLabelProps={{ shrink: true }}
-                    value={dateRange.end || ""}
-                    onChange={handleDateChange("end")}
-                    sx={{ bgcolor: "rgba(255,255,255,0.03)", borderRadius: 1 }}
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      if (!dateRange.start || !dateRange.end) {
-                        const cur = getCurrentMonthRange();
-                        setDateRange({
-                          start: cur.start.toISOString().slice(0, 10),
-                          end: cur.end.toISOString().slice(0, 10),
-                        });
-                      } else {
-                        computeTopTeachers();
-                      }
-                    }}
-                  >
-                    Apply
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={() => setDateRange({ start: null, end: null })}
-                    sx={{ color: "rgba(255,255,255,0.7)" }}
-                  >
-                    Reset
-                  </Button>
-                </Box>
+      {/* Date range inputs */}
+      <Box sx={{ display: "flex", gap: 1, mb: 2, alignItems: "center" }}>
+        <TextField
+          label="Start"
+          type="date"
+          size="small"
+          InputLabelProps={{ shrink: true }}
+          value={dateRange.start || ""}
+          onChange={handleDateChange("start")}
+          sx={{ bgcolor: "rgba(255,255,255,0.03)", borderRadius: 1 }}
+        />
+        <TextField
+          label="End"
+          type="date"
+          size="small"
+          InputLabelProps={{ shrink: true }}
+          value={dateRange.end || ""}
+          onChange={handleDateChange("end")}
+          sx={{ bgcolor: "rgba(255,255,255,0.03)", borderRadius: 1 }}
+        />
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => {
+            if (!dateRange.start || !dateRange.end) {
+              const cur = getCurrentMonthRange();
+              setDateRange({
+                start: cur.start.toISOString().slice(0, 10),
+                end: cur.end.toISOString().slice(0, 10),
+              });
+            } else {
+              computeTopTeachers();
+            }
+          }}
+        >
+          Apply
+        </Button>
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => setDateRange({ start: null, end: null })}
+          sx={{ color: "rgba(255,255,255,0.7)" }}
+        >
+          Reset
+        </Button>
+      </Box>
 
-                {/* Scrollable teacher list */}
-                <Box
-                  ref={topTeachersRef}
-                  sx={{
-                    flex: 1,
-                    overflowY: "auto",
-                    pr: 1, // add padding so scrollbar doesn’t overlap
-                  }}
-                >
-                  <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
-                    Showing: {rangeLabel}
-                  </Typography>
+      {/* Scrollable teacher list */}
+      <Box
+        ref={topTeachersRef}
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          pr: 1, // add padding so scrollbar doesn’t overlap
+        }}
+      >
+        <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
+          Showing: {rangeLabel}
+        </Typography>
 
-                  <List sx={{ mt: 1 }}>
-                    {topTeachers.length === 0 && (
-                      <Box sx={{ p: 2 }}>
-                        <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
-                          No completed sessions in this range.
-                        </Typography>
-                      </Box>
-                    )}
+        <List sx={{ mt: 1 }}>
+          {topTeachers.length === 0 && (
+            <Box sx={{ p: 2 }}>
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                No completed sessions in this range.
+              </Typography>
+            </Box>
+          )}
 
-                    {topTeachers.map((t) => (
-                      <ListItem
-                        key={t.id}
-                        sx={{
-                          borderRadius: "10px",
-                          mb: 1,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          bgcolor: "rgba(255,255,255,0.03)",
-                          p: 1,
-                        }}
-                      >
-                        {/* Avatar + Name */}
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <Avatar src={t.photoURL || ""} alt={t.name || "Unknown"} />
-                          <Typography sx={{ fontWeight: "bold" }}>{t.name}</Typography>
-                        </Box>
+          {topTeachers.map((t) => (
+            <ListItem
+              key={t.id}
+              sx={{
+                borderRadius: "10px",
+                mb: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                bgcolor: "rgba(255,255,255,0.03)",
+                p: 1,
+              }}
+            >
+              {/* Avatar + Name */}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Avatar src={t.photoURL || ""} alt={t.name || "Unknown"} />
+                <Typography sx={{ fontWeight: "bold" }}>{t.name}</Typography>
+              </Box>
 
-                        {/* Ranking badge */}
-                        <RankingBadge rank={t.rank} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              {/* Ranking badge */}
+              <RankingBadge rank={t.rank} />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </CardContent>
+  </Card>
+</Grid>
 
           {/* LATEST SESSIONS */}
           <Grid item xs={12}>
