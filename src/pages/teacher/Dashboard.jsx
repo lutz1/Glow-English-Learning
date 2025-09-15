@@ -12,6 +12,7 @@ import {
   Card,
   CardContent,
   LinearProgress,
+  Button,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import TeacherLayout from "../../layout/TeacherLayout";
@@ -22,8 +23,16 @@ import {
   where,
   onSnapshot,
   Timestamp,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+} from "firebase/storage";
 
 // Icons
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
@@ -51,6 +60,13 @@ const Dashboard = () => {
   // Modal state
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+  const [selectedSession, setSelectedSession] = useState(null);
+
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const storage = getStorage();
 
   useEffect(() => {
     if (!currentUser?.uid) return;
@@ -202,6 +218,7 @@ const Dashboard = () => {
     }
   };
 
+  // Columns for DataGrid
   const columns = [
     {
       field: "startTime",
@@ -256,6 +273,7 @@ const Dashboard = () => {
               }}
               onClick={() => {
                 setPreviewImage(params.value);
+                setSelectedSession(params.row);
                 setPreviewOpen(true);
               }}
             />
@@ -265,6 +283,46 @@ const Dashboard = () => {
         ),
     },
   ];
+
+  // Handle Reupload
+  const handleReupload = async (e, session) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      setProgress(0);
+
+      const fileRef = ref(storage, `screenshots/${currentUser.uid}/${session.id}.jpg`);
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setProgress(prog);
+        },
+        (error) => {
+          console.error("Upload failed:", error);
+          alert("Upload failed. Please try again.");
+          setUploading(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const sessionRef = doc(db, "sessions", session.id);
+          await updateDoc(sessionRef, { screenshotUrl: downloadURL });
+
+          setPreviewImage(downloadURL); // refresh modal preview
+          setUploading(false);
+          alert("Screenshot updated successfully!");
+        }
+      );
+    } catch (err) {
+      console.error("Error re-uploading screenshot:", err);
+      setUploading(false);
+      alert("Something went wrong.");
+    }
+  };
 
   if (loading) {
     return (
@@ -427,11 +485,37 @@ const Dashboard = () => {
               alt="Full Screenshot"
               sx={{
                 maxWidth: "100%",
-                maxHeight: "80vh",
+                maxHeight: "70vh",
                 borderRadius: 2,
                 boxShadow: 3,
+                mb: 2,
               }}
             />
+
+            {selectedSession && (
+              <Button
+                variant="contained"
+                component="label"
+                sx={{ bgcolor: "#64b5f6", "&:hover": { bgcolor: "#42a5f5" } }}
+              >
+                Re-upload Screenshot
+                <input
+                  hidden
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleReupload(e, selectedSession)}
+                />
+              </Button>
+            )}
+
+            {uploading && (
+              <Box sx={{ mt: 2, width: "100%" }}>
+                <LinearProgress variant="determinate" value={progress} />
+                <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
+                  {Math.round(progress)}%
+                </Typography>
+              </Box>
+            )}
           </DialogContent>
         </Dialog>
       </Box>
