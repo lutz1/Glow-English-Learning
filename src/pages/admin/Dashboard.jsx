@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// src/pages/admin/Dashboard.jsx
+import React, { useEffect, useState, useRef } from "react";
 import {
   Grid,
   Typography,
@@ -14,6 +15,9 @@ import {
   List,
   ListItem,
   Dialog,
+  TextField,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -22,15 +26,10 @@ import PaidIcon from "@mui/icons-material/Paid";
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import AdminLayout from "../../layout/AdminLayout";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import GetAppIcon from "@mui/icons-material/GetApp";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 // Define class type colors
 const classTypeColors = {
@@ -42,7 +41,21 @@ const classTypeColors = {
   Default: { bgcolor: "#64b5f6", color: "#fff" },
 };
 
-// Dashboard Component
+// Styling for glass cards
+const glassCard = {
+  background: "rgba(255,255,255,0.08)",
+  backdropFilter: "blur(12px)",
+  borderRadius: "14px",
+  boxShadow: "0 12px 24px rgba(0,0,0,0.45)",
+  color: "#fff",
+};
+
+const statusColors = {
+  completed: "success",
+  pending: "warning",
+  ongoing: "info",
+};
+
 const Dashboard = () => {
   const [teacherCount, setTeacherCount] = useState(0);
   const [teachersMap, setTeachersMap] = useState({});
@@ -52,138 +65,176 @@ const Dashboard = () => {
   const [earningData, setEarningData] = useState([]);
   const [topTeachers, setTopTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("weekly");
-  const [halfMonthRange, setHalfMonthRange] = useState({ start: null, end: null, label: "" });
-  // For screenshot lightbox
+  const [period, setPeriod] = useState("monthly");
+  // Date range override (nullable). When null, we use current month automatically.
+  const [dateRange, setDateRange] = useState({
+    start: null,
+    end: null,
+  });
   const [openScreenshot, setOpenScreenshot] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
-   // 🕒 Clock state
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  const topTeachersRef = useRef(null);
+
+  // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Helper: first and last day of current month
+  const getCurrentMonthRange = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const end = new Date(now.getFullYear(), now.getMonth(), lastDay, 23, 59, 59);
+    return { start, end, label: `${start.toLocaleDateString()} — ${end.toLocaleDateString()}` };
+  };
+
+  // When no dateRange provided, use current month
+  const effectiveRange = () => {
+    if (dateRange.start && dateRange.end) {
+      const s = new Date(dateRange.start);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(dateRange.end);
+      e.setHours(23, 59, 59, 999);
+      return { start: s, end: e, label: `${s.toLocaleDateString()} — ${e.toLocaleDateString()}` };
+    }
+    return getCurrentMonthRange();
+  };
+
+  // Load teachers map
+  useEffect(() => {
+    setLoading(true);
+    const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
+      const teachers = snapshot.docs
+        .filter((d) => d.data()?.role === "teacher")
+        .map((d) => ({ id: d.id, ...d.data() }));
+
+      setTeacherCount(teachers.length);
+
+      const map = {};
+      teachers.forEach((t) => {
+        map[t.id] = {
+          name: t.name || `${t.firstName || ""} ${t.lastName || ""}`.trim() || "Unknown",
+          photoURL: t.photoURL || "",
+        };
+      });
+      setTeachersMap(map);
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Load sessions
+  useEffect(() => {
+    setLoading(true);
+    const unsub = onSnapshot(collection(db, "sessions"), (snapshot) => {
+      const all = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      // keep some reasonable limit for list performance
+      setSessions(all.slice(0, 200));
+      // totals across all sessions
+      setTotalPayroll(
+        all.filter((s) => s.status === "completed").reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
+      );
+      setPendingPayroll(
+        all.filter((s) => s.status === "pending").reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
+      );
+
+      // update chart data (simple summary)
+      updateChartData(all);
+
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Recompute top teachers whenever sessions or teacher map or dateRange / period change
+  useEffect(() => {
+    computeTopTeachers();
+
+  }, [sessions, teachersMap, dateRange, period]);
 
   const updateChartData = (sessionsArray) => {
     const teacherData = {};
     sessionsArray
       .filter((s) => s.status === "completed")
       .forEach((s) => {
-        const teacherName =
-          teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
+        const tName = teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
         const classType = s.classType || "Default";
         const earnings = s.totalEarnings || 0;
 
-        if (!teacherData[teacherName]) {
-          teacherData[teacherName] = { teacherName };
-        }
-        teacherData[teacherName][classType] =
-          (teacherData[teacherName][classType] || 0) + earnings;
+        if (!teacherData[tName]) teacherData[tName] = { teacherName: tName };
+        teacherData[tName][classType] = (teacherData[tName][classType] || 0) + earnings;
       });
 
     setEarningData(Object.values(teacherData));
   };
 
-  // Load teachers
-  useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-      const teachers = snapshot.docs
-        .filter((doc) => doc.data().role === "teacher")
-        .map((doc) => ({ id: doc.id, ...doc.data() }));
-
-      setTeacherCount(teachers.length);
-
-      const map = {};
-      teachers.forEach((t) => {
-        map[t.id] = { name: t.name, photoURL: t.photoURL };
-      });
-      setTeachersMap(map);
+  const computeTopTeachers = () => {
+    const { start, end } = effectiveRange();
+    // Filter sessions that are completed and in the range
+    const filtered = sessions.filter((s) => {
+      if (s.status !== "completed") return false;
+      // s.endTime may be Firestore timestamp object; check both forms
+      const ts = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
+      if (!ts) return false;
+      return ts >= start && ts <= end;
     });
 
-    return () => unsubUsers();
-  }, []);
-
-const getCurrentHalfMonthRange = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-
-  if (now.getDate() <= 15) {
-    // First half
-    return {
-      start: new Date(year, month, 1, 0, 0, 0),
-      end: new Date(year, month, 15, 23, 59, 59),
-      label: "1st – 15th",
-    };
-  } else {
-    // Second half
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    return {
-      start: new Date(year, month, 16, 0, 0, 0),
-      end: new Date(year, month, lastDay, 23, 59, 59),
-      label: `16th – ${lastDay}th`,
-    };
-  }
-};
-
-  // Load sessions
-  useEffect(() => {
-    const range = getCurrentHalfMonthRange();
-    setHalfMonthRange(range);
-    const unsubSessions = onSnapshot(collection(db, "sessions"), (snapshot) => {
-      const allSessions = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-      setSessions(allSessions.slice(0, 50));
-
-      setTotalPayroll(
-        allSessions
-          .filter((s) => s.status === "completed")
-          .reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
-      );
-
-      setPendingPayroll(
-        allSessions
-          .filter((s) => s.status === "pending")
-          .reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
-      );
-
-       // ✅ Filter only sessions completed in the current half-month
-    const { start, end } = getCurrentHalfMonthRange();
-
-    const currentHalfSessions = allSessions.filter(
-      (s) =>
-        s.status === "completed" &&
-        s.endTime?.toDate &&
-        s.endTime.toDate() >= start &&
-        s.endTime.toDate() <= end
-    );
-
-    // Calculate earnings by teacher
     const earningsByTeacher = {};
-    currentHalfSessions.forEach((s) => {
-      earningsByTeacher[s.teacherId] =
-        (earningsByTeacher[s.teacherId] || 0) + (s.totalEarnings || 0);
+    filtered.forEach((s) => {
+      const id = s.teacherId || s.teacherUID || s.teacher;
+      if (!id) return;
+      earningsByTeacher[id] = (earningsByTeacher[id] || 0) + (s.totalEarnings || 0);
     });
 
     const ranked = Object.entries(earningsByTeacher)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([id, earnings]) => ({
+      .slice(0, 10) // take top 10 for display
+      .map(([id, earnings], index) => ({
         id,
         earnings,
         name: teachersMap[id]?.name || "Unknown",
         photoURL: teachersMap[id]?.photoURL || "",
+        rank: index + 1,
       }));
 
     setTopTeachers(ranked);
-    updateChartData(allSessions);
-    setLoading(false);
-  });
+  };
 
-  return () => unsubSessions();
-}, []);
+  // Export PDF of Top Teachers card
+  const exportTopTeachersToPDF = async () => {
+    if (!topTeachersRef.current) return;
+    const el = topTeachersRef.current;
 
+    // increase pixel ratio for better resolution
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL("image/png");
+
+    // create pdf sized to image ratio (A4 portrait)
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // compute image dimensions while preserving ratio
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgWidth = pageWidth - 20; // 10mm margin each side
+    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+
+    pdf.addImage(imgData, "PNG", 10, 10, imgWidth, imgHeight);
+    pdf.save(`top-teachers-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  // Handlers for date pickers
+  const handleDateChange = (field) => (e) => {
+    setDateRange((prev) => ({ ...prev, [field]: e.target.value || null }));
+  };
+
+  // UI when loading
   if (loading)
     return (
       <Box
@@ -199,19 +250,21 @@ const getCurrentHalfMonthRange = () => {
       </Box>
     );
 
-  const statusColors = {
-    completed: "success",
-    pending: "warning",
-    ongoing: "info",
+  // Helper to render ranking badge
+  const RankingBadge = ({ rank }) => {
+    if (rank === 1) {
+      return <Chip label="🥇 1st" size="small" sx={{ ml: 1, bgcolor: "#FFD700", color: "#000" }} />;
+    }
+    if (rank === 2) {
+      return <Chip label="🥈 2nd" size="small" sx={{ ml: 1, bgcolor: "#C0C0C0", color: "#000" }} />;
+    }
+    if (rank === 3) {
+      return <Chip label="🥉 3rd" size="small" sx={{ ml: 1, bgcolor: "#CD7F32", color: "#000" }} />;
+    }
+    return <Chip label={`#${rank}`} size="small" sx={{ ml: 1, bgcolor: "rgba(255,255,255,0.06)" }} />;
   };
 
-  const glassCard = {
-    background: "rgba(255,255,255,0.1)",
-    backdropFilter: "blur(18px)",
-    borderRadius: "18px",
-    boxShadow: "0 16px 32px rgba(0,0,0,0.5)",
-    color: "#fff",
-  };
+  const { start: effStart, end: effEnd, label: rangeLabel } = effectiveRange();
 
   return (
     <AdminLayout>
@@ -225,15 +278,15 @@ const getCurrentHalfMonthRange = () => {
       >
         {/* HEADER */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-  <Typography variant="h4" fontWeight="bold">
-    Admin Dashboard Overview
-  </Typography>
+          <Typography variant="h4" fontWeight="bold">
+            Admin Dashboard Overview
+          </Typography>
 
-  {/* 🕒 Live Clock */}
-  <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
-    {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-  </Typography>
-</Box>
+          {/* Live clock */}
+          <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
+            {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </Typography>
+        </Box>
 
         <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.2)" }} />
 
@@ -275,153 +328,214 @@ const getCurrentHalfMonthRange = () => {
             </Card>
           </Grid>
 
-          {/* CHART */}
-          {/* CHART */}
-<Grid item xs={12} md={8}>
-  <Card sx={{ ...glassCard, height: 450, position: "relative", overflow: "hidden" }}>
-    <CardContent>
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-        <Typography variant="h6">Earnings Summary</Typography>
-        <ButtonGroup size="small">
-          <Button
-            variant={period === "weekly" ? "contained" : "outlined"}
-            onClick={() => setPeriod("weekly")}
-          >
-            Weekly
-          </Button>
-          <Button
-            variant={period === "monthly" ? "contained" : "outlined"}
-            onClick={() => setPeriod("monthly")}
-          >
-            Monthly
-          </Button>
-        </ButtonGroup>
-      </Box>
-
-      {/* Chart stays here (hidden behind overlay) */}
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={earningData}>
-          {/* ...chart content */}
-        </BarChart>
-      </ResponsiveContainer>
-
-      {/* Overlay for Coming Soon */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          bgcolor: "rgba(0,0,0,0.75)",
-          zIndex: 10,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          backdropFilter: "blur(4px)",
-          color: "#fff",
-          textAlign: "center",
-        }}
-      >
-        {/* Animated Builder */}
-        <div className="builder-animation">
-          <span className="emoji">👷‍♂️</span>
-          <span className="emoji">🔨</span>
-        </div>
-
-        <Typography
-          variant="h5"
-          sx={{
-            fontWeight: "bold",
-            mt: 2,
-            mb: 1,
-            background: "linear-gradient(90deg, #64b5f6, #81c784, #ffb74d)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Feature Coming Soon
-        </Typography>
-
-        <Typography
-          variant="body2"
-          sx={{ color: "rgba(255,255,255,0.7)" }}
-        >
-          We’re crafting advanced analytics for you.<br />
-          Stay tuned for updates 🚀
-        </Typography>
-      </Box>
-    </CardContent>
-  </Card>
-
-  {/* Animations */}
-  <style>
-    {`
-      .builder-animation {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 3rem;
-        gap: 0.5rem;
-      }
-
-      .builder-animation .emoji {
-        display: inline-block;
-        animation: bounce 1.5s infinite;
-      }
-
-      .builder-animation .emoji:nth-child(2) {
-        animation: hammer 1.2s infinite;
-      }
-
-      @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
-      }
-
-      @keyframes hammer {
-        0% { transform: rotate(0deg); }
-        25% { transform: rotate(-30deg); }
-        50% { transform: rotate(0deg); }
-        75% { transform: rotate(-30deg); }
-        100% { transform: rotate(0deg); }
-      }
-    `}
-  </style>
-</Grid>
-
-          {/* TOP TEACHERS */}
-          <Grid item xs={12} md={4}>
-            <Card sx={{ ...glassCard, height: 450 }}>
+          {/* EARNINGS SUMMARY PLACEHOLDER */}
+          <Grid item xs={12} md={8}>
+            <Card sx={{ ...glassCard, height: 450, position: "relative", overflow: "hidden" }}>
               <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}>
-                🌟 Top Teachers {halfMonthRange.label && `(${halfMonthRange.label})`}
-              </Typography>
-                <List>
-                  {topTeachers.map((t, idx) => (
-                    <React.Fragment key={t.id}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+                  <Typography variant="h6">Earnings Summary</Typography>
+                  <ButtonGroup size="small">
+                    <Button variant={period === "weekly" ? "contained" : "outlined"} onClick={() => setPeriod("weekly")}>
+                      Weekly
+                    </Button>
+                    <Button variant={period === "monthly" ? "contained" : "outlined"} onClick={() => setPeriod("monthly")}>
+                      Monthly
+                    </Button>
+                  </ButtonGroup>
+                </Box>
+
+                <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                  Chart coming soon — analytics are being crafted. For now, earnings are summarized and Top Teachers can be exported by month or custom date range.
+                </Typography>
+
+                {/* big overlay placeholder */}
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    bgcolor: "rgba(0,0,0,0.7)",
+                    zIndex: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backdropFilter: "blur(4px)",
+                    color: "#fff",
+                    textAlign: "center",
+                  }}
+                >
+                  <div className="builder-animation">
+                    <span className="emoji">👷‍♂️</span>
+                    <span className="emoji">🔨</span>
+                  </div>
+
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: "bold",
+                      mt: 2,
+                      mb: 1,
+                      background: "linear-gradient(90deg, #64b5f6, #81c784, #ffb74d)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                    }}
+                  >
+                    Feature Coming Soon
+                  </Typography>
+
+                  <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                    We’re building advanced analytics for you. Stay tuned 🚀
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+
+            <style>
+              {`
+                .builder-animation {
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 3rem;
+                  gap: 0.5rem;
+                }
+                .builder-animation .emoji {
+                  display: inline-block;
+                  animation: bounce 1.5s infinite;
+                }
+                .builder-animation .emoji:nth-child(2) {
+                  animation: hammer 1.2s infinite;
+                }
+                @keyframes bounce {
+                  0%, 100% { transform: translateY(0); }
+                  50% { transform: translateY(-10px); }
+                }
+                @keyframes hammer {
+                  0% { transform: rotate(0deg); }
+                  25% { transform: rotate(-30deg); }
+                  50% { transform: rotate(0deg); }
+                  75% { transform: rotate(-30deg); }
+                  100% { transform: rotate(0deg); }
+                }
+              `}
+            </style>
+          </Grid>
+
+          {/* TOP TEACHERS + date range + export PDF */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ ...glassCard, minHeight: 250 }}>
+              <CardContent>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
+                    🌟 Top Teachers
+                  </Typography>
+
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <Tooltip title="Export Top Teachers (PDF)">
+                      <IconButton size="small" onClick={exportTopTeachersToPDF} sx={{ color: "#fff" }}>
+                        <PictureAsPdfIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
+
+                {/* Date range inputs */}
+                <Box sx={{ display: "flex", gap: 1, mb: 2, alignItems: "center" }}>
+                  <TextField
+                    label="Start"
+                    type="date"
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                    value={dateRange.start || ""}
+                    onChange={handleDateChange("start")}
+                    sx={{ bgcolor: "rgba(255,255,255,0.03)", borderRadius: 1 }}
+                  />
+                  <TextField
+                    label="End"
+                    type="date"
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                    value={dateRange.end || ""}
+                    onChange={handleDateChange("end")}
+                    sx={{ bgcolor: "rgba(255,255,255,0.03)", borderRadius: 1 }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      // If either date is missing, reset to current month
+                      if (!dateRange.start || !dateRange.end) {
+                        const cur = getCurrentMonthRange();
+                        setDateRange({ start: cur.start.toISOString().slice(0, 10), end: cur.end.toISOString().slice(0, 10) });
+                      } else {
+                        computeTopTeachers();
+                      }
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => {
+                      // reset to monthly auto-range
+                      setDateRange({ start: null, end: null });
+                    }}
+                    sx={{ color: "rgba(255,255,255,0.7)" }}
+                  >
+                    Reset
+                  </Button>
+                </Box>
+
+                {/* Top teachers list - this is what we export to PDF (ref) */}
+                <div ref={topTeachersRef} style={{ padding: 6 }}>
+                  <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
+                    Showing: {rangeLabel}
+                  </Typography>
+
+                  <List sx={{ mt: 1 }}>
+                    {topTeachers.length === 0 && (
+                      <Box sx={{ p: 2 }}>
+                        <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                          No completed sessions in this range.
+                        </Typography>
+                      </Box>
+                    )}
+
+                    {topTeachers.map((t) => (
                       <ListItem
+                        key={t.id}
                         sx={{
-                          borderRadius: "12px",
-                          "&:hover": { backgroundColor: "rgba(255,255,255,0.1)" },
+                          borderRadius: "10px",
+                          mb: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          bgcolor: "rgba(255,255,255,0.03)",
+                          p: 1,
                         }}
                       >
-                        <Avatar src={t.photoURL || ""} alt={t.name || t.id} sx={{ mr: 2 }} />
-                        <Typography sx={{ fontWeight: "bold", flex: 1 }}>{t.name}</Typography>
-                        <Typography>₱{t.earnings.toFixed(2)}</Typography>
-                        {idx < 3 && (
-                          <EmojiEventsIcon
-                            sx={{
-                              ml: 1,
-                              color: idx === 0 ? "gold" : idx === 1 ? "silver" : "#cd7f32",
-                            }}
-                          />
-                        )}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Avatar src={t.photoURL || ""} alt={t.name || t.id} />
+                          <Box>
+                            <Typography sx={{ fontWeight: "bold" }}>{t.name}</Typography>
+                            <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
+                              {t.id}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography sx={{ fontWeight: "bold" }}>₱{(t.earnings || 0).toFixed(2)}</Typography>
+                          <RankingBadge rank={t.rank} />
+                        </Box>
                       </ListItem>
-                    </React.Fragment>
-                  ))}
-                </List>
+                    ))}
+                  </List>
+                </div>
               </CardContent>
             </Card>
           </Grid>
@@ -443,7 +557,7 @@ const getCurrentHalfMonthRange = () => {
                     borderRadius: "10px",
                     mb: 1,
                     fontWeight: "bold",
-                    bgcolor: "rgba(255,255,255,0.12)",
+                    bgcolor: "rgba(255,255,255,0.06)",
                     textAlign: "center",
                   }}
                 >
@@ -458,6 +572,9 @@ const getCurrentHalfMonthRange = () => {
                 <List sx={{ maxHeight: 400, overflow: "auto" }}>
                   {sessions.map((s) => {
                     const teacher = teachersMap[s.teacherId] || {};
+                    const startTime = s.startTime?.toDate ? s.startTime.toDate() : s.startTime ? new Date(s.startTime) : null;
+                    const endTime = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
+
                     return (
                       <ListItem
                         key={s.id}
@@ -468,20 +585,20 @@ const getCurrentHalfMonthRange = () => {
                           p: 1.5,
                           mb: 1,
                           borderRadius: "12px",
-                          bgcolor: "rgba(255,255,255,0.05)",
-                          "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+                          bgcolor: "rgba(255,255,255,0.03)",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
                           textAlign: "center",
                         }}
                       >
                         {/* Teacher */}
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                          <Avatar src={teacher.photoURL || ""} />
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, justifySelf: "start" }}>
+                          <Avatar src={teacher.photoURL || ""} alt={teacher.name || s.teacherName || s.teacherId} />
                           <Box sx={{ textAlign: "left" }}>
                             <Typography sx={{ fontWeight: "bold" }}>
                               {teacher.name || s.teacherName || s.teacherId}
                             </Typography>
                             <Chip
-                              label={s.classType}
+                              label={s.classType || "N/A"}
                               size="small"
                               sx={{
                                 mt: 0.5,
@@ -493,25 +610,21 @@ const getCurrentHalfMonthRange = () => {
                         </Box>
 
                         {/* Status */}
-                        <Chip
-                          label={s.status}
-                          size="small"
-                          color={statusColors[s.status] || "default"}
-                        />
+                        <Chip label={s.status} size="small" color={statusColors[s.status] || "default"} />
 
                         {/* Time */}
                         <Box>
                           <Typography sx={{ fontSize: "0.75rem" }}>
-                            {s.startTime?.toDate ? s.startTime.toDate().toLocaleString() : "-"}
+                            {startTime ? startTime.toLocaleString() : "-"}
                           </Typography>
                           <Typography sx={{ fontSize: "0.75rem" }}>
-                            {s.endTime?.toDate ? s.endTime.toDate().toLocaleString() : "-"}
+                            {endTime ? endTime.toLocaleString() : "-"}
                           </Typography>
                         </Box>
 
                         {/* Earnings */}
                         <Typography sx={{ fontWeight: "bold", color: "#81c784" }}>
-                          ₱{s.totalEarnings?.toFixed(2) || "0.00"}
+                          ₱{(s.totalEarnings || 0).toFixed(2)}
                         </Typography>
 
                         {/* Screenshot */}
@@ -525,7 +638,7 @@ const getCurrentHalfMonthRange = () => {
                                 height: 40,
                                 objectFit: "cover",
                                 borderRadius: "6px",
-                                border: "1px solid rgba(255,255,255,0.2)",
+                                border: "1px solid rgba(255,255,255,0.15)",
                                 cursor: "pointer",
                                 transition: "transform 0.2s ease",
                               }}
@@ -535,9 +648,7 @@ const getCurrentHalfMonthRange = () => {
                               }}
                             />
                           ) : (
-                            <Typography sx={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>
-                              N/A
-                            </Typography>
+                            <Typography sx={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>N/A</Typography>
                           )}
                         </Box>
                       </ListItem>
@@ -561,24 +672,11 @@ const getCurrentHalfMonthRange = () => {
             sx: { background: "rgba(0,0,0,0.9)", boxShadow: "none" },
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              p: 2,
-              position: "relative",
-            }}
-          >
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", p: 2, position: "relative" }}>
             <img
               src={selectedScreenshot}
               alt="Screenshot Preview"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "80vh",
-                borderRadius: "10px",
-                objectFit: "contain",
-              }}
+              style={{ maxWidth: "100%", maxHeight: "80vh", borderRadius: "10px", objectFit: "contain" }}
             />
             <Box
               sx={{
