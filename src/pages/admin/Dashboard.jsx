@@ -452,20 +452,18 @@ const Dashboard = () => {
 
           {/* TOP TEACHERS + date range + export PDF */}
           <Grid item xs={12} md={4}>
-  <Card sx={{ ...glassCard, minHeight: 250, height: "100%" }}>
+  <Card sx={{ ...glassCard, height: 450 }}>
     <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
         <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
           🌟 Top Teachers
         </Typography>
 
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Tooltip title="Export Top Teachers (PDF)">
-            <IconButton size="small" onClick={exportTopTeachersToPDF} sx={{ color: "#fff" }}>
-              <PictureAsPdfIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        <Tooltip title="Export Top Teachers (PDF)">
+          <IconButton size="small" onClick={exportTopTeachersToPDF} sx={{ color: "#fff" }}>
+            <PictureAsPdfIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {/* Date range inputs */}
@@ -521,7 +519,7 @@ const Dashboard = () => {
         sx={{
           flex: 1,
           overflowY: "auto",
-          pr: 1, // add padding so scrollbar doesn’t overlap
+          pr: 1,
         }}
       >
         <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
