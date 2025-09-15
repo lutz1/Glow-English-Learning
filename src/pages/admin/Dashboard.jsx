@@ -24,12 +24,10 @@ import { db } from "../../firebase";
 import SchoolIcon from "@mui/icons-material/School";
 import PaidIcon from "@mui/icons-material/Paid";
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
-import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import AdminLayout from "../../layout/AdminLayout";
-import GetAppIcon from "@mui/icons-material/GetApp";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
-import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 // Define class type colors
 const classTypeColors = {
@@ -66,11 +64,7 @@ const Dashboard = () => {
   const [topTeachers, setTopTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("monthly");
-  // Date range override (nullable). When null, we use current month automatically.
-  const [dateRange, setDateRange] = useState({
-    start: null,
-    end: null,
-  });
+  const [dateRange, setDateRange] = useState({ start: null, end: null });
   const [openScreenshot, setOpenScreenshot] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -92,7 +86,6 @@ const Dashboard = () => {
     return { start, end, label: `${start.toLocaleDateString()} — ${end.toLocaleDateString()}` };
   };
 
-  // When no dateRange provided, use current month
   const effectiveRange = () => {
     if (dateRange.start && dateRange.end) {
       const s = new Date(dateRange.start);
@@ -104,7 +97,7 @@ const Dashboard = () => {
     return getCurrentMonthRange();
   };
 
-  // Load teachers map
+  // Load teachers
   useEffect(() => {
     setLoading(true);
     const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
@@ -133,29 +126,18 @@ const Dashboard = () => {
     setLoading(true);
     const unsub = onSnapshot(collection(db, "sessions"), (snapshot) => {
       const all = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // keep some reasonable limit for list performance
       setSessions(all.slice(0, 200));
-      // totals across all sessions
-      setTotalPayroll(
-        all.filter((s) => s.status === "completed").reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
-      );
-      setPendingPayroll(
-        all.filter((s) => s.status === "pending").reduce((acc, s) => acc + (s.totalEarnings || 0), 0)
-      );
-
-      // update chart data (simple summary)
+      setTotalPayroll(all.filter((s) => s.status === "completed").reduce((acc, s) => acc + (s.totalEarnings || 0), 0));
+      setPendingPayroll(all.filter((s) => s.status === "pending").reduce((acc, s) => acc + (s.totalEarnings || 0), 0));
       updateChartData(all);
-
       setLoading(false);
     });
 
     return () => unsub();
   }, []);
 
-  // Recompute top teachers whenever sessions or teacher map or dateRange / period change
   useEffect(() => {
     computeTopTeachers();
-
   }, [sessions, teachersMap, dateRange, period]);
 
   const updateChartData = (sessionsArray) => {
@@ -166,20 +148,16 @@ const Dashboard = () => {
         const tName = teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
         const classType = s.classType || "Default";
         const earnings = s.totalEarnings || 0;
-
         if (!teacherData[tName]) teacherData[tName] = { teacherName: tName };
         teacherData[tName][classType] = (teacherData[tName][classType] || 0) + earnings;
       });
-
     setEarningData(Object.values(teacherData));
   };
 
   const computeTopTeachers = () => {
     const { start, end } = effectiveRange();
-    // Filter sessions that are completed and in the range
     const filtered = sessions.filter((s) => {
       if (s.status !== "completed") return false;
-      // s.endTime may be Firestore timestamp object; check both forms
       const ts = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
       if (!ts) return false;
       return ts >= start && ts <= end;
@@ -194,7 +172,7 @@ const Dashboard = () => {
 
     const ranked = Object.entries(earningsByTeacher)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10) // take top 10 for display
+      .slice(0, 10)
       .map(([id, earnings], index) => ({
         id,
         earnings,
@@ -206,65 +184,113 @@ const Dashboard = () => {
     setTopTeachers(ranked);
   };
 
-  // Export PDF of Top Teachers card
-  const exportTopTeachersToPDF = async () => {
-    if (!topTeachersRef.current) return;
-    const el = topTeachersRef.current;
-
-    // increase pixel ratio for better resolution
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true });
-    const imgData = canvas.toDataURL("image/png");
-
-    // create pdf sized to image ratio (A4 portrait)
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    // compute image dimensions while preserving ratio
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgWidth = pageWidth - 20; // 10mm margin each side
-    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-
-    pdf.addImage(imgData, "PNG", 10, 10, imgWidth, imgHeight);
-    pdf.save(`top-teachers-${new Date().toISOString().slice(0, 10)}.pdf`);
+  // Helper to load avatars
+  const getBase64ImageFromUrl = async (url) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
   };
 
-  // Handlers for date pickers
+  // Export Top Teachers PDF
+  const exportTopTeachersToPDF = async () => {
+    if (!topTeachers || topTeachers.length === 0) {
+      alert("No top teachers to export.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("🌟 Top Teachers Report", 14, 20);
+    doc.setFontSize(12);
+    doc.text(`Date Range: ${effectiveRange().label}`, 14, 28);
+
+    const tableColumn = ["Rank", "Teacher", "Earnings"];
+    const tableRows = [];
+
+    const avatars = {};
+    for (const t of topTeachers) {
+      if (t.photoURL) {
+        try {
+          avatars[t.id] = await getBase64ImageFromUrl(t.photoURL);
+        } catch {
+          avatars[t.id] = null;
+        }
+      }
+    }
+
+    topTeachers.forEach((t, index) => {
+      const rank = `#${index + 1}`;
+      const name = t.name || "Unknown";
+      const earnings = `₱${(t.earnings || 0).toFixed(2)}`;
+      tableRows.push([rank, name, earnings]);
+    });
+
+    doc.autoTable({
+      startY: 35,
+      head: [tableColumn],
+      body: tableRows,
+      styles: { fontSize: 11, halign: "center", valign: "middle" },
+      headStyles: { fillColor: [100, 181, 246], textColor: 255, fontStyle: "bold" },
+      didDrawCell: (data) => {
+        const rowIndex = data.row.index;
+        const teacher = topTeachers[rowIndex];
+
+        // 🎖 Rank colors
+        if (data.column.index === 0 && rowIndex >= 0) {
+          if (teacher.rank === 1) doc.setTextColor(255, 215, 0);
+          else if (teacher.rank === 2) doc.setTextColor(192, 192, 192);
+          else if (teacher.rank === 3) doc.setTextColor(205, 127, 50);
+          else doc.setTextColor(150);
+
+          doc.setFontSize(12);
+          doc.text(`#${teacher.rank}`, data.cell.x + 10, data.cell.y + 6);
+          doc.setTextColor(0);
+        }
+
+        // 👤 Avatar
+        if (data.column.index === 1 && rowIndex >= 0) {
+          const avatar = avatars[teacher.id];
+          if (avatar) {
+            const dim = 8;
+            const x = data.cell.x + 2;
+            const y = data.cell.y + 2;
+            doc.addImage(avatar, "JPEG", x, y, dim, dim);
+            doc.setFontSize(11);
+            doc.text(teacher.name, x + dim + 3, y + dim - 1);
+          }
+        }
+      },
+    });
+
+    doc.save("Top_Teachers_Report.pdf");
+  };
+
+  // Date input change
   const handleDateChange = (field) => (e) => {
     setDateRange((prev) => ({ ...prev, [field]: e.target.value || null }));
   };
 
-  // UI when loading
-  if (loading)
+  // Loading state
+  if (loading) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)",
-        }}
-      >
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)" }}>
         <CircularProgress sx={{ color: "#fff" }} />
       </Box>
     );
+  }
 
-  // Helper to render ranking badge
- const RankingBadge = ({ rank }) => {
-  if (rank === 1) {
-    return <Chip label="🥇 1st" size="small" sx={{ ml: 1, bgcolor: "#FFD700", color: "#000" }} />;
-  }
-  if (rank === 2) {
-    return <Chip label="🥈 2nd" size="small" sx={{ ml: 1, bgcolor: "#C0C0C0", color: "#000" }} />;
-  }
-  if (rank === 3) {
-    return <Chip label="🥉 3rd" size="small" sx={{ ml: 1, bgcolor: "#CD7F32", color: "#000" }} />;
-  }
-  return <Chip label={`#${rank}`} size="small" sx={{ ml: 1, bgcolor: "rgba(255,255,255,0.06)" }} />;
-};
+  const RankingBadge = ({ rank }) => {
+    if (rank === 1) return <Chip label="🥇 1st" size="small" sx={{ ml: 1, bgcolor: "#FFD700", color: "#000" }} />;
+    if (rank === 2) return <Chip label="🥈 2nd" size="small" sx={{ ml: 1, bgcolor: "#C0C0C0", color: "#000" }} />;
+    if (rank === 3) return <Chip label="🥉 3rd" size="small" sx={{ ml: 1, bgcolor: "#CD7F32", color: "#000" }} />;
+    return <Chip label={`#${rank}`} size="small" sx={{ ml: 1, bgcolor: "rgba(255,255,255,0.06)" }} />;
+  };
 
-  const { start: effStart, end: effEnd, label: rangeLabel } = effectiveRange();
+  const { label: rangeLabel } = effectiveRange();
 
   return (
     <AdminLayout>
