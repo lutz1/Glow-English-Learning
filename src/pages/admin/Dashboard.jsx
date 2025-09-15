@@ -550,7 +550,7 @@ const getCurrentHalfMonthRange = () => {
         </Grid>
       </Box>
 
-       {/* Screenshot Lightbox with Re-upload */}
+      {/* Screenshot Lightbox */}
       {selectedScreenshot && (
         <Dialog
           open={openScreenshot}
@@ -564,48 +564,22 @@ const getCurrentHalfMonthRange = () => {
           <Box
             sx={{
               display: "flex",
-              flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
               p: 2,
               position: "relative",
             }}
           >
-            {/* Screenshot Preview */}
             <img
               src={selectedScreenshot}
               alt="Screenshot Preview"
               style={{
                 maxWidth: "100%",
-                maxHeight: "70vh",
+                maxHeight: "80vh",
                 borderRadius: "10px",
                 objectFit: "contain",
-                marginBottom: "16px",
               }}
             />
-
-            {/* Re-upload Button */}
-            <Button
-              variant="contained"
-              component="label"
-              sx={{ mt: 2, bgcolor: "#64b5f6", "&:hover": { bgcolor: "#42a5f5" } }}
-            >
-              Re-upload Screenshot
-              <input
-                hidden
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    const file = e.target.files[0];
-                    // TODO: Upload logic here (Firebase storage, backend API, etc.)
-                    console.log("Re-uploaded file:", file);
-                  }
-                }}
-              />
-            </Button>
-
-            {/* Close Button */}
             <Box
               sx={{
                 position: "absolute",
