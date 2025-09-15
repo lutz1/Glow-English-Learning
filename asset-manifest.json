@@ -1,20 +1,20 @@
 {
   "files": {
     "main.css": "/Glow-English-Learning/static/css/main.e6c13ad2.css",
-    "main.js": "/Glow-English-Learning/static/js/main.acf600f0.js",
+    "main.js": "/Glow-English-Learning/static/js/main.6c9cf575.js",
     "static/js/977.7441744b.chunk.js": "/Glow-English-Learning/static/js/977.7441744b.chunk.js",
     "static/js/553.e2202b69.chunk.js": "/Glow-English-Learning/static/js/553.e2202b69.chunk.js",
     "static/js/488.d7ba45b8.chunk.js": "/Glow-English-Learning/static/js/488.d7ba45b8.chunk.js",
     "static/media/logo.jpg": "/Glow-English-Learning/static/media/logo.a801f0f843254d1bec91.jpg",
     "index.html": "/Glow-English-Learning/index.html",
     "main.e6c13ad2.css.map": "/Glow-English-Learning/static/css/main.e6c13ad2.css.map",
-    "main.acf600f0.js.map": "/Glow-English-Learning/static/js/main.acf600f0.js.map",
+    "main.6c9cf575.js.map": "/Glow-English-Learning/static/js/main.6c9cf575.js.map",
     "977.7441744b.chunk.js.map": "/Glow-English-Learning/static/js/977.7441744b.chunk.js.map",
     "553.e2202b69.chunk.js.map": "/Glow-English-Learning/static/js/553.e2202b69.chunk.js.map",
     "488.d7ba45b8.chunk.js.map": "/Glow-English-Learning/static/js/488.d7ba45b8.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.e6c13ad2.css",
-    "static/js/main.acf600f0.js"
+    "static/js/main.6c9cf575.js"
   ]
 }
