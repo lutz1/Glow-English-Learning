@@ -184,8 +184,7 @@ const StartSession = () => {
   const startFixedClass = async () => {
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = classConfig.duration;
-    const perMinuteRate = classConfig.rate / classConfig.duration;
-    const totalEarnings = perMinuteRate * totalMinutes;
+    const totalEarnings = classConfig.rate;
 
     setTargetSeconds(totalMinutes * 60);
     setElapsedSeconds(0);
@@ -246,11 +245,8 @@ const StartSession = () => {
       await updateDoc(doc(db, "sessions", sessionId), {
         status: "awaiting_screenshot",
         actualDuration: elapsedSeconds,
-        actualEarnings: (
-          (CLASS_SETTINGS[classType].rate / CLASS_SETTINGS[classType].duration) *
-          (elapsedSeconds / 60)
-        ).toFixed(2),
-        endTime: serverTimestamp(), // ✅ record endTime
+        actualEarnings: CLASS_SETTINGS[classType].rate,
+        endTime: serverTimestamp(),
       });
     }
   };
@@ -280,7 +276,7 @@ const StartSession = () => {
         actualDuration: elapsedSeconds,
         actualEarnings: CLASS_SETTINGS[classType].rate / 2,
         halfPay: true,
-        endTime: serverTimestamp(), // ✅ record endTime
+        endTime: serverTimestamp(),
       });
     }
   };
@@ -370,6 +366,8 @@ const StartSession = () => {
               const isActive =
                 classType === key &&
                 (status === "ongoing" || status === "awaiting_screenshot");
+              const classConfig = CLASS_SETTINGS[key];
+
               return (
                 <motion.div
                   key={key}
@@ -381,7 +379,7 @@ const StartSession = () => {
                     sx={{
                       minHeight: 200,
                       color: "#fff",
-                      background: CLASS_SETTINGS[key].gradient,
+                      background: classConfig.gradient,
                       borderRadius: 3,
                       display: "flex",
                       flexDirection: "column",
@@ -401,7 +399,7 @@ const StartSession = () => {
                     }}
                   >
                     <CardContent sx={{ textAlign: "center", width: "100%" }}>
-                      {CLASS_SETTINGS[key].icon}
+                      {classConfig.icon}
                       <Typography
                         variant="h6"
                         sx={{ mt: 1, fontWeight: 700 }}
@@ -414,8 +412,7 @@ const StartSession = () => {
                           variant="body2"
                           sx={{ mt: 0.5, opacity: 0.9 }}
                         >
-                          ₱{CLASS_SETTINGS[key].rate} (
-                          {CLASS_SETTINGS[key].duration} mins)
+                          ₱{classConfig.rate} ({classConfig.duration} mins)
                         </Typography>
                       )}
 
@@ -424,17 +421,33 @@ const StartSession = () => {
                           <Typography variant="h5">
                             ⏱ {formatMMSS(elapsedSeconds)}
                           </Typography>
-                          <Typography
-                            variant="body1"
-                            sx={{ mt: 1, fontWeight: "bold" }}
+
+                          {/* 💰 Cash bag animation with fixed earning */}
+                          <motion.div
+                            animate={{
+                              y: [0, -10, 0],
+                              scale: [1, 1.2, 1],
+                            }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                            }}
+                            style={{ marginTop: "12px" }}
                           >
-                            ₱
-                            {(
-                              (CLASS_SETTINGS[key].rate /
-                                CLASS_SETTINGS[key].duration) *
-                              (elapsedSeconds / 60)
-                            ).toFixed(2)}
-                          </Typography>
+                            <Typography
+                              variant="h5"
+                              sx={{
+                                fontWeight: "bold",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                              }}
+                            >
+                              💰 ₱{classConfig.rate}
+                            </Typography>
+                          </motion.div>
+
                           <Box
                             sx={{
                               mt: 2,
@@ -530,7 +543,14 @@ const StartSession = () => {
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <DialogTitle
+          sx={{
+            fontWeight: "bold",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           Set Duration for {classType}
           <IconButton onClick={() => setOpenDialog(false)} size="small">
             <Close />
@@ -569,112 +589,45 @@ const StartSession = () => {
           <Typography sx={{ mt: 2, fontSize: 13, color: "text.secondary" }}>
             Minimum: {CLASS_SETTINGS[classType]?.duration || 0} minutes
           </Typography>
-        </DialogContent>
-        <Divider />
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={confirmStart}
-            sx={{ borderRadius: 2 }}
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+<DialogActions>
+<Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+<Button
+variant="contained"
+color="primary"
+onClick={confirmStart}
+>
+Start
+</Button>
+</DialogActions>
+</Dialog>
 
-      {/* Confirm start dialog */}
-      <Dialog
-        open={confirmDialog}
-        onClose={() => setConfirmDialog(false)}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            p: 1,
-            width: "360px",
-            maxWidth: "90%",
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          Confirm Start
-          <IconButton onClick={() => setConfirmDialog(false)} size="small">
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ mt: 2 }}>
-          <Typography>
-            Are you sure you want to start{" "}
-            <strong>{classType}</strong> session?
-          </Typography>
-        </DialogContent>
-        <Divider />
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={startFixedClass}
-            sx={{ borderRadius: 2 }}
-          >
-            Yes, Start
-          </Button>
-        </DialogActions>
-      </Dialog>
 
-      {/* Confirm cancel dialog */}
-          <Dialog
-            open={cancelDialog}
-            onClose={() => setCancelDialog(false)}
-            PaperProps={{
-              sx: {
-                borderRadius: 3,
-                p: 1,
-                width: "360px",
-                maxWidth: "90%",
-              },
-            }}
-          >
-            <DialogTitle
-              sx={{
-                fontWeight: "bold",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              Confirm Cancel
-              <IconButton onClick={() => setCancelDialog(false)} size="small">
-                <Close />
-              </IconButton>
-            </DialogTitle>
-            <Divider />
-            <DialogContent sx={{ mt: 2 }}>
-              <Typography>
-                Are you sure you want to <strong>cancel</strong> this{" "}
-                <strong>{classType}</strong> session?  
-                <br />
-                (This action cannot be undone)
-              </Typography>
-            </DialogContent>
-            <Divider />
-            <DialogActions sx={{ p: 2 }}>
-              <Button onClick={() => setCancelDialog(false)}>No</Button>
-              <Button
-                variant="contained"
-                color="error"
-                onClick={async () => {
-                  await handleCancel();
-                  setCancelDialog(false);
-                }}
-                sx={{ borderRadius: 2 }}
-              >
-                Yes, Cancel
-              </Button>
-            </DialogActions>
-          </Dialog>
-    </TeacherLayout>
-  );
+{/* Confirm fixed class dialog */}
+<Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
+<DialogTitle>Start {classType}?</DialogTitle>
+<DialogActions>
+<Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
+<Button variant="contained" onClick={startFixedClass}>
+Start
+</Button>
+</DialogActions>
+</Dialog>
+
+
+{/* Cancel confirmation */}
+<Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
+<DialogTitle>Cancel this class?</DialogTitle>
+<DialogActions>
+<Button onClick={() => setCancelDialog(false)}>No</Button>
+<Button variant="contained" color="error" onClick={handleCancel}>
+Yes, Cancel
+</Button>
+</DialogActions>
+        </Dialog>
+        </TeacherLayout>
+);
 };
+
 
 export default StartSession;
