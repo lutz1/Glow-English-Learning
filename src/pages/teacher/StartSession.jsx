@@ -100,6 +100,7 @@ const StartSession = () => {
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [selectedHours, setSelectedHours] = useState(0);
   const [selectedMinutes, setSelectedMinutes] = useState(0);
+  const [cancelDialog, setCancelDialog] = useState(false);
 
   const startTsRef = useRef(null);
   const intervalRef = useRef(null);
@@ -452,7 +453,7 @@ const StartSession = () => {
                             <Button
                               variant="contained"
                               color="error"
-                              onClick={handleCancel}
+                              onClick={() => setCancelDialog(true)}
                             >
                               Cancel
                             </Button>
@@ -620,6 +621,58 @@ const StartSession = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Confirm cancel dialog */}
+          <Dialog
+            open={cancelDialog}
+            onClose={() => setCancelDialog(false)}
+            PaperProps={{
+              sx: {
+                borderRadius: 3,
+                p: 1,
+                width: "360px",
+                maxWidth: "90%",
+              },
+            }}
+          >
+            <DialogTitle
+              sx={{
+                fontWeight: "bold",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              Confirm Cancel
+              <IconButton onClick={() => setCancelDialog(false)} size="small">
+                <Close />
+              </IconButton>
+            </DialogTitle>
+            <Divider />
+            <DialogContent sx={{ mt: 2 }}>
+              <Typography>
+                Are you sure you want to <strong>cancel</strong> this{" "}
+                <strong>{classType}</strong> session?  
+                <br />
+                (This action cannot be undone)
+              </Typography>
+            </DialogContent>
+            <Divider />
+            <DialogActions sx={{ p: 2 }}>
+              <Button onClick={() => setCancelDialog(false)}>No</Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={async () => {
+                  await handleCancel();
+                  setCancelDialog(false);
+                }}
+                sx={{ borderRadius: 2 }}
+              >
+                Yes, Cancel
+              </Button>
+            </DialogActions>
+          </Dialog>
     </TeacherLayout>
   );
 };
