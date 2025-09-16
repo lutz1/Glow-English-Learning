@@ -123,9 +123,7 @@ const StartSession = () => {
         setClassType(data.classType);
         setTargetSeconds(data.durationSeconds);
         startTsRef.current = data.startTime?.toDate().getTime();
-        setElapsedSeconds(
-          Math.floor((Date.now() - startTsRef.current) / 1000)
-        );
+        setElapsedSeconds(Math.floor((Date.now() - startTsRef.current) / 1000));
         setStatus(data.status);
         setRunning(data.status === "ongoing");
       }
@@ -165,11 +163,23 @@ const StartSession = () => {
     return `${m}:${s}`;
   };
 
-  const handleClassClick = (key) => {
+  const handleClassClick = async (key) => {
     if (running || status === "ongoing" || status === "awaiting_screenshot")
       return;
-    const classConfig = CLASS_SETTINGS[key];
 
+    // 🔍 Prevent duplicate session creation
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid),
+      where("status", "in", ["ongoing", "awaiting_screenshot"])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      alert("⚠️ You already have an active session.");
+      return;
+    }
+
+    const classConfig = CLASS_SETTINGS[key];
     setClassType(key);
     if (classConfig.custom) {
       setSelectedHours(0);
@@ -182,31 +192,61 @@ const StartSession = () => {
 
   // Start fixed-duration class
   const startFixedClass = async () => {
-  const classConfig = CLASS_SETTINGS[classType];
-  const totalMinutes = classConfig.duration;
-  const totalEarnings = classConfig.rate;
+    if (!currentUser) return;
 
-  setTargetSeconds(totalMinutes * 60);
-  setElapsedSeconds(0);
-  startTsRef.current = Date.now();
-  setRunning(true);
-  setStatus("ongoing");
+    // 🔍 Prevent duplicate session creation
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid),
+      where("status", "in", ["ongoing", "awaiting_screenshot"])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      alert("⚠️ You already have an active session.");
+      setConfirmDialog(false);
+      return;
+    }
+
+    const classConfig = CLASS_SETTINGS[classType];
+    const totalMinutes = classConfig.duration;
+    const totalEarnings = classConfig.rate;
+
+    setTargetSeconds(totalMinutes * 60);
+    setElapsedSeconds(0);
+    startTsRef.current = Date.now();
+    setRunning(true);
+    setStatus("ongoing");
 
     const docRef = await addDoc(collection(db, "sessions"), {
-    teacherId: currentUser.uid,
-    classType,
-    rate: classConfig.rate,
-    durationSeconds: totalMinutes * 60,
-    totalEarnings,
-    startTime: serverTimestamp(),
-    status: "ongoing",
-  });
-  setSessionId(docRef.id);
-  setConfirmDialog(false); // ✅ close confirm dialog
-};
+      teacherId: currentUser.uid,
+      classType,
+      rate: classConfig.rate,
+      durationSeconds: totalMinutes * 60,
+      totalEarnings,
+      startTime: serverTimestamp(),
+      status: "ongoing",
+    });
+    setSessionId(docRef.id);
+    setConfirmDialog(false); // ✅ close confirm dialog
+  };
 
   // Start custom-duration class
   const confirmStart = async () => {
+    if (!currentUser) return;
+
+    // 🔍 Prevent duplicate session creation
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid),
+      where("status", "in", ["ongoing", "awaiting_screenshot"])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      alert("⚠️ You already have an active session.");
+      setOpenDialog(false);
+      return;
+    }
+
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = selectedHours * 60 + selectedMinutes;
     if (totalMinutes < classConfig.duration) {
@@ -238,33 +278,33 @@ const StartSession = () => {
 
   // Stop class
   const handleStop = async () => {
-  if (sessionId) {
-    clearInterval(intervalRef.current);
-    setRunning(false);
-    setStatus("awaiting_screenshot");
-    await updateDoc(doc(db, "sessions", sessionId), {
-      status: "awaiting_screenshot",
-      actualDuration: elapsedSeconds,
-      actualEarnings: CLASS_SETTINGS[classType].rate,
-      endTime: serverTimestamp(),
-    });
-    setConfirmDialog(false); // ✅ close dialog if used
-  }
-};
+    if (sessionId) {
+      clearInterval(intervalRef.current);
+      setRunning(false);
+      setStatus("awaiting_screenshot");
+      await updateDoc(doc(db, "sessions", sessionId), {
+        status: "awaiting_screenshot",
+        actualDuration: elapsedSeconds,
+        actualEarnings: CLASS_SETTINGS[classType].rate,
+        endTime: serverTimestamp(),
+      });
+      setConfirmDialog(false); // ✅ close dialog if used
+    }
+  };
 
   // Cancel class
   const handleCancel = async () => {
-  if (sessionId) {
-    await deleteDoc(doc(db, "sessions", sessionId));
-    clearInterval(intervalRef.current);
-    setRunning(false);
-    setClassType("");
-    setStatus(null);
-    setSessionId(null);
-    setElapsedSeconds(0);
-  }
-  setCancelDialog(false); // ✅ close cancel dialog
-};
+    if (sessionId) {
+      await deleteDoc(doc(db, "sessions", sessionId));
+      clearInterval(intervalRef.current);
+      setRunning(false);
+      setClassType("");
+      setStatus(null);
+      setSessionId(null);
+      setElapsedSeconds(0);
+    }
+    setCancelDialog(false); // ✅ close cancel dialog
+  };
 
   // Half pay (Vietnamese class special case)
   const handleHalfPay = async () => {
@@ -288,7 +328,9 @@ const StartSession = () => {
     if (!screenshotFile || !sessionId) return;
 
     try {
-      const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${screenshotFile.name}`;
+      const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${
+        screenshotFile.name
+      }`;
       const storageRef = ref(storage, filePath);
 
       setUploading(true);
@@ -591,45 +633,38 @@ const StartSession = () => {
           <Typography sx={{ mt: 2, fontSize: 13, color: "text.secondary" }}>
             Minimum: {CLASS_SETTINGS[classType]?.duration || 0} minutes
           </Typography>
-          </DialogContent>
-<DialogActions>
-<Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-<Button
-variant="contained"
-color="primary"
-onClick={confirmStart}
->
-Start
-</Button>
-</DialogActions>
-</Dialog>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button variant="contained" color="primary" onClick={confirmStart}>
+            Start
+          </Button>
+        </DialogActions>
+      </Dialog>
 
+      {/* Confirm fixed class dialog */}
+      <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
+        <DialogTitle>Start {classType}?</DialogTitle>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={startFixedClass}>
+            Start
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-{/* Confirm fixed class dialog */}
-<Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
-<DialogTitle>Start {classType}?</DialogTitle>
-<DialogActions>
-<Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
-<Button variant="contained" onClick={startFixedClass}>
-Start
-</Button>
-</DialogActions>
-</Dialog>
-
-
-{/* Cancel confirmation */}
-<Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
-<DialogTitle>Do you want to cancel this session?</DialogTitle>
-<DialogActions>
-<Button onClick={() => setCancelDialog(false)}>No</Button>
-<Button variant="contained" color="error" onClick={handleCancel}>
-Yes, Cancel
-</Button>
-</DialogActions>
-        </Dialog>
-        </TeacherLayout>
-);
+      {/* Cancel confirmation */}
+      <Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
+        <DialogTitle>Do you want to cancel this session?</DialogTitle>
+        <DialogActions>
+          <Button onClick={() => setCancelDialog(false)}>No</Button>
+          <Button variant="contained" color="error" onClick={handleCancel}>
+            Yes, Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </TeacherLayout>
+  );
 };
-
 
 export default StartSession;
