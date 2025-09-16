@@ -619,7 +619,7 @@ Start
 
 {/* Cancel confirmation */}
 <Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
-<DialogTitle>Cancel this class?</DialogTitle>
+<DialogTitle>Do you want to cancel this session?</DialogTitle>
 <DialogActions>
 <Button onClick={() => setCancelDialog(false)}>No</Button>
 <Button variant="contained" color="error" onClick={handleCancel}>
