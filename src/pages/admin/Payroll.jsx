@@ -145,7 +145,7 @@ const Payroll = () => {
         cameraStream.getTracks().forEach((t) => t.stop());
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [teacherViewOpen]);
 
   const filterByDate = (list, from, to) => {
