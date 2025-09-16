@@ -1,3 +1,4 @@
+// src/pages/admin/Payroll.jsx
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -23,7 +24,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import PaidIcon from "@mui/icons-material/AttachMoney";
 import PendingIcon from "@mui/icons-material/HourglassEmpty";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import { db } from "../../firebase";
+import { db, storage } from "../../firebase";
 import {
   collection,
   getDocs,
@@ -35,6 +36,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { ref as storageRef, deleteObject } from "firebase/storage";
 import AdminLayout from "../../layout/AdminLayout";
 import { History } from "@mui/icons-material";
 import jsPDF from "jspdf";
@@ -92,22 +94,26 @@ const Payroll = () => {
     }
   };
 
-  // fetch sessions
+  // fetch sessions (returns list for convenience)
   const fetchSessions = async () => {
     try {
       const q = query(collection(db, "sessions"), orderBy("startTime", "desc"));
       const snap = await getDocs(q);
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setSessions(list);
+      return list;
     } catch (err) {
       console.error("Error fetching sessions:", err);
+      return [];
     }
   };
 
-useEffect(() => {
-    fetchTeachers();
-    fetchSessions();
-    fetchPayrollHistory();
+  useEffect(() => {
+    (async () => {
+      await fetchTeachers();
+      await fetchSessions();
+      await fetchPayrollHistory();
+    })();
   }, []);
 
   // Camera start/stop when dialog opens
@@ -139,7 +145,7 @@ useEffect(() => {
         cameraStream.getTracks().forEach((t) => t.stop());
       }
     };
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teacherViewOpen]);
 
   const filterByDate = (list, from, to) => {
@@ -158,32 +164,32 @@ useEffect(() => {
   };
 
   const getTeacherSummary = () => {
-  const summary = {};
-  sessions.forEach((s) => {
-    // ❌ Skip sessions that are already marked as "paid"
-    if (s.status === "paid") return;
+    const summary = {};
+    sessions.forEach((s) => {
+      // Skip sessions that are already marked as "paid"
+      if (s.status === "paid") return;
 
-    const teacherInfo = teacherMap[s.teacherId] || {};
-    const name = teacherInfo.name || "Unknown";
-    const email = teacherInfo.email || "N/A";
-    const tid = s.teacherId || "unknown";
+      const teacherInfo = teacherMap[s.teacherId] || {};
+      const name = teacherInfo.name || "Unknown";
+      const email = teacherInfo.email || "N/A";
+      const tid = s.teacherId || "unknown";
 
-    if (!summary[tid]) {
-      summary[tid] = {
-        teacherId: tid,
-        fullName: name,
-        email,
-        photoURL: teacherInfo.photoURL || "",
-        totalEarnings: 0,
-        paid: false, // these are unpaid sessions
-      };
-    }
+      if (!summary[tid]) {
+        summary[tid] = {
+          teacherId: tid,
+          fullName: name,
+          email,
+          photoURL: teacherInfo.photoURL || "",
+          totalEarnings: 0,
+          paid: false, // these are unpaid sessions
+        };
+      }
 
-    summary[tid].totalEarnings += s.totalEarnings || 0;
-  });
+      summary[tid].totalEarnings += s.totalEarnings || 0;
+    });
 
-  return summary;
-};
+    return summary;
+  };
 
   const viewTeacherSessions = (teacherName, teacherId) => {
     const filtered = sessions.filter((s) => s.teacherId === teacherId);
@@ -211,6 +217,16 @@ useEffect(() => {
       );
       const snap = await getDocs(q);
       for (const docSnap of snap.docs) {
+        const sdata = docSnap.data();
+        // delete screenshot from storage if exists
+        if (sdata.screenshotUrl) {
+          try {
+            await deleteObject(storageRef(storage, sdata.screenshotUrl));
+          } catch (err) {
+            // log but keep going
+            console.warn("Could not delete screenshot from storage:", err);
+          }
+        }
         await deleteDoc(doc(db, "sessions", docSnap.id));
       }
       await fetchSessions();
@@ -218,6 +234,35 @@ useEffect(() => {
     } catch (err) {
       console.error("Error deleting sessions:", err);
       alert("Error deleting sessions. Check console for details.");
+    }
+  };
+
+  // Delete single session (with optional screenshot removal)
+  const deleteSingleSession = async (sessionId, screenshotUrl) => {
+    if (!sessionId) return;
+    const ok = window.confirm("Are you sure you want to delete this session? This will also delete its screenshot from storage (if any).");
+    if (!ok) return;
+
+    try {
+      // delete screenshot in storage if exists
+      if (screenshotUrl) {
+        try {
+          await deleteObject(storageRef(storage, screenshotUrl));
+        } catch (err) {
+          console.warn("Failed to delete screenshot from storage:", err);
+          // continue to delete doc anyway
+        }
+      }
+      await deleteDoc(doc(db, "sessions", sessionId));
+
+      // refresh sessions and teacher sessions shown
+      const updated = await fetchSessions(); // fetchSessions returns updated list
+      if (selectedTeacherId) {
+        setTeacherSessions(updated.filter((s) => s.teacherId === selectedTeacherId));
+      }
+    } catch (err) {
+      console.error("Error deleting session:", err);
+      alert("Failed to delete session. See console for details.");
     }
   };
 
@@ -263,7 +308,6 @@ useEffect(() => {
 
   // normalize input which may be: dataURL (png/jpeg) or http(s) url
   // returns JPEG dataURL
-  // 🔄 Normalize ANY base64 image into JPEG base64 (safe for jsPDF)
   const normalizeToJpegDataUrl = (dataUrl) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -312,13 +356,10 @@ useEffect(() => {
 
   // Capture from a react-webcam-like ref (if you decide to switch)
   const capturePhotoFromRef = (imageSrc) => {
-    // if you capture from a library that returns base64 already
     if (!imageSrc) return;
-    // ensure JPEG
     if (imageSrc.startsWith("data:image/jpeg")) {
       setCapturedReceipt(imageSrc);
     } else {
-      // convert
       forceDataURLtoJpeg(imageSrc).then((jpeg) => {
         setCapturedReceipt(jpeg);
       });
@@ -348,7 +389,6 @@ useEffect(() => {
 
   // ✅ Utility: Convert any image URL to JPEG base64
   const loadImageAsBase64 = async (url) => {
-    // Accepts a relative path or remote URL. Returns a JPEG data URL.
     const response = await fetch(url);
     if (!response.ok) throw new Error("Failed to fetch image: " + url);
     const blob = await response.blob();
@@ -470,26 +510,26 @@ useEffect(() => {
       // --------------------------
       // Save Payroll History
       // --------------------------
-              const payrollData = {
-              teacherId: selectedTeacherId || "",
-              teacherName: teacher?.name || "Unknown",
-              email: teacher?.email || "",
-              periodFrom: dateFrom || "",
-              periodTo: dateTo || "",
-              totalAmount: parseFloat(totalAmount) || 0,
-              receipt: capturedReceipt || null,
-              createdAt: new Date(),
-              sessions: filteredSessions.map((s) => ({
-                id: s.id || "",
-                classType: s.classType || "N/A",
-                startTime: s.startTime || null,
-                actualDuration: s.actualDuration || 0,
-                totalEarnings: s.totalEarnings || 0,
-              })),
-            };
+      const payrollData = {
+        teacherId: selectedTeacherId || "",
+        teacherName: teacher?.name || "Unknown",
+        email: teacher?.email || "",
+        periodFrom: dateFrom || "",
+        periodTo: dateTo || "",
+        totalAmount: parseFloat(totalAmount) || 0,
+        receipt: capturedReceipt || null,
+        createdAt: new Date(),
+        sessions: filteredSessions.map((s) => ({
+          id: s.id || "",
+          classType: s.classType || "N/A",
+          startTime: s.startTime || null,
+          actualDuration: s.actualDuration || 0,
+          totalEarnings: s.totalEarnings || 0,
+        })),
+      };
 
-console.log("Saving payrollData:", payrollData);
-await addDoc(collection(db, "payrollHistory"), payrollData);
+      console.log("Saving payrollData:", payrollData);
+      await addDoc(collection(db, "payrollHistory"), payrollData);
 
       // --------------------------
       // Mark ONLY filtered sessions as paid
@@ -734,6 +774,14 @@ await addDoc(collection(db, "payrollHistory"), payrollData);
                       <Typography variant="caption" color="text.secondary">
                         {s.startTime ? new Date(s.startTime.seconds * 1000).toLocaleTimeString() : ""}
                       </Typography>
+
+                      {/* End time display */}
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        End:
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {s.endTime ? new Date(s.endTime.seconds * 1000).toLocaleString() : "—"}
+                      </Typography>
                     </Grid>
                     <Grid item xs={12} sm={5}>
                       <Typography fontWeight="bold">{s.classType}</Typography>
@@ -748,11 +796,19 @@ await addDoc(collection(db, "payrollHistory"), payrollData);
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={2} textAlign="right">
-                      {s.screenshotUrl && (
-                        <Button size="small" variant="outlined" onClick={() => setSelectedScreenshot(s.screenshotUrl)}>
-                          Screenshot
-                        </Button>
-                      )}
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        {s.screenshotUrl && (
+                          <Button size="small" variant="outlined" onClick={() => setSelectedScreenshot(s.screenshotUrl)}>
+                            Screenshot
+                          </Button>
+                        )}
+
+                        <Tooltip title="Delete Session">
+                          <IconButton size="small" color="error" onClick={() => deleteSingleSession(s.id, s.screenshotUrl)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
                     </Grid>
                   </Grid>
                 </Card>
@@ -1067,7 +1123,6 @@ await addDoc(collection(db, "payrollHistory"), payrollData);
                   ₱{(h.totalAmount || 0).toFixed(2)}
                 </Typography>
 
-                {/* ✅ Use Typography instead of raw <p> */}
                 <Typography variant="caption" color="text.secondary">
                   Generated on: {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString() : ""}
                 </Typography>
