@@ -660,8 +660,8 @@ const StartSession = () => {
           <Button onClick={() => setCancelDialog(false)}>No</Button>
           <Button variant="contained" color="error" onClick={handleCancel}>
             Yes, Cancel
-          </Button>
-        </DialogActions>
+          </Button> 
+        </DialogActions> 
       </Dialog>
     </TeacherLayout>
   );
