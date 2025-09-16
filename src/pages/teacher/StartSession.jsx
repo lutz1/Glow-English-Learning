@@ -182,28 +182,28 @@ const StartSession = () => {
 
   // Start fixed-duration class
   const startFixedClass = async () => {
-    const classConfig = CLASS_SETTINGS[classType];
-    const totalMinutes = classConfig.duration;
-    const totalEarnings = classConfig.rate;
+  const classConfig = CLASS_SETTINGS[classType];
+  const totalMinutes = classConfig.duration;
+  const totalEarnings = classConfig.rate;
 
-    setTargetSeconds(totalMinutes * 60);
-    setElapsedSeconds(0);
-    startTsRef.current = Date.now();
-    setRunning(true);
-    setStatus("ongoing");
+  setTargetSeconds(totalMinutes * 60);
+  setElapsedSeconds(0);
+  startTsRef.current = Date.now();
+  setRunning(true);
+  setStatus("ongoing");
 
     const docRef = await addDoc(collection(db, "sessions"), {
-      teacherId: currentUser.uid,
-      classType,
-      rate: classConfig.rate,
-      durationSeconds: totalMinutes * 60,
-      totalEarnings,
-      startTime: serverTimestamp(),
-      status: "ongoing",
-    });
-    setSessionId(docRef.id);
-    setConfirmDialog(false);
-  };
+    teacherId: currentUser.uid,
+    classType,
+    rate: classConfig.rate,
+    durationSeconds: totalMinutes * 60,
+    totalEarnings,
+    startTime: serverTimestamp(),
+    status: "ongoing",
+  });
+  setSessionId(docRef.id);
+  setConfirmDialog(false); // ✅ close confirm dialog
+};
 
   // Start custom-duration class
   const confirmStart = async () => {
@@ -238,31 +238,33 @@ const StartSession = () => {
 
   // Stop class
   const handleStop = async () => {
-    if (sessionId) {
-      clearInterval(intervalRef.current);
-      setRunning(false);
-      setStatus("awaiting_screenshot");
-      await updateDoc(doc(db, "sessions", sessionId), {
-        status: "awaiting_screenshot",
-        actualDuration: elapsedSeconds,
-        actualEarnings: CLASS_SETTINGS[classType].rate,
-        endTime: serverTimestamp(),
-      });
-    }
-  };
+  if (sessionId) {
+    clearInterval(intervalRef.current);
+    setRunning(false);
+    setStatus("awaiting_screenshot");
+    await updateDoc(doc(db, "sessions", sessionId), {
+      status: "awaiting_screenshot",
+      actualDuration: elapsedSeconds,
+      actualEarnings: CLASS_SETTINGS[classType].rate,
+      endTime: serverTimestamp(),
+    });
+    setConfirmDialog(false); // ✅ close dialog if used
+  }
+};
 
   // Cancel class
   const handleCancel = async () => {
-    if (sessionId) {
-      await deleteDoc(doc(db, "sessions", sessionId));
-      clearInterval(intervalRef.current);
-      setRunning(false);
-      setClassType("");
-      setStatus(null);
-      setSessionId(null);
-      setElapsedSeconds(0);
-    }
-  };
+  if (sessionId) {
+    await deleteDoc(doc(db, "sessions", sessionId));
+    clearInterval(intervalRef.current);
+    setRunning(false);
+    setClassType("");
+    setStatus(null);
+    setSessionId(null);
+    setElapsedSeconds(0);
+  }
+  setCancelDialog(false); // ✅ close cancel dialog
+};
 
   // Half pay (Vietnamese class special case)
   const handleHalfPay = async () => {
