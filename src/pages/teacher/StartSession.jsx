@@ -1,4 +1,3 @@
-// src/pages/teacher/StartSession.jsx
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -32,6 +31,7 @@ import TeacherLayout from "../../layout/TeacherLayout";
 import { db, storage } from "../../firebase";
 import {
   collection,
+  addDoc,
   serverTimestamp,
   query,
   where,
@@ -39,7 +39,6 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  runTransaction,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
@@ -103,54 +102,30 @@ const StartSession = () => {
   const [selectedMinutes, setSelectedMinutes] = useState(0);
   const [cancelDialog, setCancelDialog] = useState(false);
 
-  // New: prevent double-click/duplicate session creation
-  const [creatingSession, setCreatingSession] = useState(false);
-
   const startTsRef = useRef(null);
   const intervalRef = useRef(null);
-
-  // ---------------------------
-  // Helper: release lock
-  // ---------------------------
-  const releaseLock = async () => {
-    if (!currentUser) return;
-    try {
-      await deleteDoc(doc(db, "sessionLocks", currentUser.uid));
-    } catch (err) {
-      // ignore: may not exist or permission issues
-      console.warn("releaseLock:", err);
-    }
-  };
 
   // 🔄 Restore unfinished sessions
   useEffect(() => {
     if (!currentUser) return;
     const fetchSession = async () => {
-      try {
-        const q = query(
-          collection(db, "sessions"),
-          where("teacherId", "==", currentUser.uid),
-          where("status", "in", ["ongoing", "awaiting_screenshot"])
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const docData = snap.docs[0];
-          const data = docData.data();
+      const q = query(
+        collection(db, "sessions"),
+        where("teacherId", "==", currentUser.uid),
+        where("status", "in", ["ongoing", "awaiting_screenshot"])
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docData = snap.docs[0];
+        const data = docData.data();
 
-          setSessionId(docData.id);
-          setClassType(data.classType);
-          setTargetSeconds(data.durationSeconds);
-          startTsRef.current = data.startTime?.toDate
-            ? data.startTime.toDate().getTime()
-            : Date.now();
-          setElapsedSeconds(
-            Math.floor((Date.now() - startTsRef.current) / 1000)
-          );
-          setStatus(data.status);
-          setRunning(data.status === "ongoing");
-        }
-      } catch (err) {
-        console.error("fetchSession error:", err);
+        setSessionId(docData.id);
+        setClassType(data.classType);
+        setTargetSeconds(data.durationSeconds);
+        startTsRef.current = data.startTime?.toDate().getTime();
+        setElapsedSeconds(Math.floor((Date.now() - startTsRef.current) / 1000));
+        setStatus(data.status);
+        setRunning(data.status === "ongoing");
       }
     };
     fetchSession();
@@ -174,15 +149,12 @@ const StartSession = () => {
             updateDoc(doc(db, "sessions", sessionId), {
               status: "awaiting_screenshot",
               endTime: serverTimestamp(), // ✅ record endTime
-            }).catch((err) =>
-              console.warn("Failed to update session endTime:", err)
-            );
+            });
           }
         }
       }, 1000);
     }
     return () => intervalRef.current && clearInterval(intervalRef.current);
-   
   }, [running, targetSeconds, sessionId, status]);
 
   const formatMMSS = (seconds) => {
@@ -192,32 +164,19 @@ const StartSession = () => {
   };
 
   const handleClassClick = async (key) => {
-    // local guard
-    if (creatingSession) return;
-
     if (running || status === "ongoing" || status === "awaiting_screenshot")
       return;
 
-    // server-side guard: check 'sessionLocks' quickly (non-transactional)
-    if (!currentUser) {
-      alert("Please sign in.");
+    // 🔍 Prevent duplicate session creation
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid),
+      where("status", "in", ["ongoing", "awaiting_screenshot"])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      alert("⚠️ You already have an active session.");
       return;
-    }
-
-    try {
-      const q = query(
-        collection(db, "sessions"),
-        where("teacherId", "==", currentUser.uid),
-        where("status", "in", ["ongoing", "awaiting_screenshot"])
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        alert("⚠️ You already have an active session.");
-        return;
-      }
-    } catch (err) {
-      console.warn("handleClassClick: quick existing-session check failed", err);
-      // continue — we'll rely on transaction when starting
     }
 
     const classConfig = CLASS_SETTINGS[key];
@@ -231,74 +190,62 @@ const StartSession = () => {
     }
   };
 
-  // ---------------------------
-  // Start fixed-duration class (transactional + lock)
-  // ---------------------------
+  // Start fixed-duration class
   const startFixedClass = async () => {
-    if (!currentUser || !classType) return;
-    if (creatingSession) return;
+    if (!currentUser) return;
+
+    // 🔍 Prevent duplicate session creation
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid),
+      where("status", "in", ["ongoing", "awaiting_screenshot"])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      alert("⚠️ You already have an active session.");
+      setConfirmDialog(false);
+      return;
+    }
 
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = classConfig.duration;
     const totalEarnings = classConfig.rate;
 
-    // create refs now (client-side random id) so we can set them in transaction
-    const newSessionRef = doc(collection(db, "sessions"));
-    const lockRef = doc(db, "sessionLocks", currentUser.uid);
+    setTargetSeconds(totalMinutes * 60);
+    setElapsedSeconds(0);
+    startTsRef.current = Date.now();
+    setRunning(true);
+    setStatus("ongoing");
 
-    setCreatingSession(true);
-    try {
-      await runTransaction(db, async (transaction) => {
-        const lockSnap = await transaction.get(lockRef);
-        if (lockSnap.exists()) {
-          // someone else has a lock (concurrent start) — abort
-          throw new Error("active_session_exists");
-        }
-
-        // create session and lock in same transaction
-        transaction.set(newSessionRef, {
-          teacherId: currentUser.uid,
-          classType,
-          rate: classConfig.rate,
-          durationSeconds: totalMinutes * 60,
-          totalEarnings,
-          startTime: serverTimestamp(),
-          status: "ongoing",
-        });
-
-        transaction.set(lockRef, {
-          sessionId: newSessionRef.id,
-          teacherId: currentUser.uid,
-          createdAt: serverTimestamp(),
-        });
-      });
-
-      // transaction committed successfully — update local state
-      setTargetSeconds(totalMinutes * 60);
-      setElapsedSeconds(0);
-      startTsRef.current = Date.now();
-      setRunning(true);
-      setStatus("ongoing");
-      setSessionId(newSessionRef.id);
-      setConfirmDialog(false);
-    } catch (err) {
-      if (err?.message === "active_session_exists") {
-        alert("⚠️ You already have an active session.");
-      } else {
-        console.error("startFixedClass transaction failed:", err);
-        alert("Failed to start session. Try again.");
-      }
-    } finally {
-      setCreatingSession(false);
-    }
+    const docRef = await addDoc(collection(db, "sessions"), {
+      teacherId: currentUser.uid,
+      classType,
+      rate: classConfig.rate,
+      durationSeconds: totalMinutes * 60,
+      totalEarnings,
+      startTime: serverTimestamp(),
+      status: "ongoing",
+    });
+    setSessionId(docRef.id);
+    setConfirmDialog(false); // ✅ close confirm dialog
   };
 
-  // ---------------------------
-  // Start custom-duration class (transactional + lock)
-  // ---------------------------
+  // Start custom-duration class
   const confirmStart = async () => {
-    if (!currentUser || !classType) return;
-    if (creatingSession) return;
+    if (!currentUser) return;
+
+    // 🔍 Prevent duplicate session creation
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid),
+      where("status", "in", ["ongoing", "awaiting_screenshot"])
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      alert("⚠️ You already have an active session.");
+      setOpenDialog(false);
+      return;
+    }
 
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = selectedHours * 60 + selectedMinutes;
@@ -310,87 +257,45 @@ const StartSession = () => {
     const perMinuteRate = classConfig.rate / classConfig.duration;
     const totalEarnings = perMinuteRate * totalMinutes;
 
-    const newSessionRef = doc(collection(db, "sessions"));
-    const lockRef = doc(db, "sessionLocks", currentUser.uid);
+    setTargetSeconds(totalMinutes * 60);
+    setElapsedSeconds(0);
+    startTsRef.current = Date.now();
+    setRunning(true);
+    setStatus("ongoing");
+    setOpenDialog(false);
 
-    setCreatingSession(true);
-    try {
-      await runTransaction(db, async (transaction) => {
-        const lockSnap = await transaction.get(lockRef);
-        if (lockSnap.exists()) {
-          throw new Error("active_session_exists");
-        }
-
-        transaction.set(newSessionRef, {
-          teacherId: currentUser.uid,
-          classType,
-          rate: classConfig.rate,
-          durationSeconds: totalMinutes * 60,
-          totalEarnings,
-          startTime: serverTimestamp(),
-          status: "ongoing",
-        });
-
-        transaction.set(lockRef, {
-          sessionId: newSessionRef.id,
-          teacherId: currentUser.uid,
-          createdAt: serverTimestamp(),
-        });
-      });
-
-      // success: set local state
-      setTargetSeconds(totalMinutes * 60);
-      setElapsedSeconds(0);
-      startTsRef.current = Date.now();
-      setRunning(true);
-      setStatus("ongoing");
-      setSessionId(newSessionRef.id);
-      setOpenDialog(false);
-    } catch (err) {
-      if (err?.message === "active_session_exists") {
-        alert("⚠️ You already have an active session.");
-      } else {
-        console.error("confirmStart transaction failed:", err);
-        alert("Failed to start session. Try again.");
-      }
-    } finally {
-      setCreatingSession(false);
-    }
+    const docRef = await addDoc(collection(db, "sessions"), {
+      teacherId: currentUser.uid,
+      classType,
+      rate: classConfig.rate,
+      durationSeconds: totalMinutes * 60,
+      totalEarnings,
+      startTime: serverTimestamp(),
+      status: "ongoing",
+    });
+    setSessionId(docRef.id);
   };
 
-  // Stop class (moves to awaiting_screenshot — keep lock)
+  // Stop class
   const handleStop = async () => {
     if (sessionId) {
       clearInterval(intervalRef.current);
       setRunning(false);
       setStatus("awaiting_screenshot");
-      try {
-        await updateDoc(doc(db, "sessions", sessionId), {
-          status: "awaiting_screenshot",
-          actualDuration: elapsedSeconds,
-          actualEarnings: CLASS_SETTINGS[classType].rate,
-          endTime: serverTimestamp(),
-        });
-      } catch (err) {
-        console.warn("handleStop: failed to update session:", err);
-      }
-      setConfirmDialog(false); // close dialog if used
+      await updateDoc(doc(db, "sessions", sessionId), {
+        status: "awaiting_screenshot",
+        actualDuration: elapsedSeconds,
+        actualEarnings: CLASS_SETTINGS[classType].rate,
+        endTime: serverTimestamp(),
+      });
+      setConfirmDialog(false); // ✅ close dialog if used
     }
   };
 
-  // Cancel class: delete session and release lock
+  // Cancel class
   const handleCancel = async () => {
     if (sessionId) {
-      try {
-        await deleteDoc(doc(db, "sessions", sessionId));
-      } catch (err) {
-        console.warn("handleCancel: failed to delete session:", err);
-      }
-      try {
-        await releaseLock();
-      } catch (err) {
-        // ignore
-      }
+      await deleteDoc(doc(db, "sessions", sessionId));
       clearInterval(intervalRef.current);
       setRunning(false);
       setClassType("");
@@ -398,33 +303,29 @@ const StartSession = () => {
       setSessionId(null);
       setElapsedSeconds(0);
     }
-    setCancelDialog(false);
+    setCancelDialog(false); // ✅ close cancel dialog
   };
 
-  // Half pay (Vietnamese class special case) — keep lock
+  // Half pay (Vietnamese class special case)
   const handleHalfPay = async () => {
     if (sessionId && classType === "Vietnamese Class") {
       clearInterval(intervalRef.current);
       setRunning(false);
       setStatus("awaiting_screenshot");
 
-      try {
-        await updateDoc(doc(db, "sessions", sessionId), {
-          status: "awaiting_screenshot",
-          actualDuration: elapsedSeconds,
-          actualEarnings: CLASS_SETTINGS[classType].rate / 2,
-          halfPay: true,
-          endTime: serverTimestamp(),
-        });
-      } catch (err) {
-        console.warn("handleHalfPay failed:", err);
-      }
+      await updateDoc(doc(db, "sessions", sessionId), {
+        status: "awaiting_screenshot",
+        actualDuration: elapsedSeconds,
+        actualEarnings: CLASS_SETTINGS[classType].rate / 2,
+        halfPay: true,
+        endTime: serverTimestamp(),
+      });
     }
   };
 
-  // ✅ Upload screenshot with progress — after completion remove lock
+  // ✅ Upload screenshot with progress
   const handleUpload = async () => {
-    if (!screenshotFile || !sessionId || !currentUser) return;
+    if (!screenshotFile || !sessionId) return;
 
     try {
       const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${
@@ -450,38 +351,23 @@ const StartSession = () => {
           setUploading(false);
         },
         async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-            await updateDoc(doc(db, "sessions", sessionId), {
-              status: "completed",
-              screenshotUrl: downloadURL,
-              screenshotName: screenshotFile.name,
-              endTime: serverTimestamp(),
-            });
+          await updateDoc(doc(db, "sessions", sessionId), {
+            status: "completed",
+            screenshotUrl: downloadURL,
+            screenshotName: screenshotFile.name,
+          });
 
-            // release the lock now that session is completed
-            try {
-              await releaseLock();
-            } catch (err) {
-              console.warn("Failed to release lock after upload:", err);
-            }
+          setStatus("completed");
+          setClassType("");
+          setRunning(false);
+          setSessionId(null);
+          setElapsedSeconds(0);
+          setScreenshotFile(null);
+          setUploading(false);
 
-            // reset local state
-            setStatus("completed");
-            setClassType("");
-            setRunning(false);
-            setSessionId(null);
-            setElapsedSeconds(0);
-            setScreenshotFile(null);
-            setUploading(false);
-
-            alert("✅ Screenshot uploaded successfully!");
-          } catch (err) {
-            console.error("handleUpload finish error:", err);
-            alert("❌ Upload finished but failed updating session. Check console.");
-            setUploading(false);
-          }
+          alert("✅ Screenshot uploaded successfully!");
         }
       );
     } catch (error) {
@@ -491,9 +377,6 @@ const StartSession = () => {
     }
   };
 
-  // ---------------------------
-  // UI
-  // ---------------------------
   return (
     <TeacherLayout>
       <Box sx={{ p: 3 }}>
@@ -529,17 +412,12 @@ const StartSession = () => {
                 (status === "ongoing" || status === "awaiting_screenshot");
               const classConfig = CLASS_SETTINGS[key];
 
-              // compute pointerEvents: if creatingSession disable interactions
-              const disabledByCreating = creatingSession;
-
               return (
                 <motion.div
                   key={key}
-                  whileHover={!isActive && !disabledByCreating ? { scale: 1.05 } : {}}
-                  whileTap={!isActive && !disabledByCreating ? { scale: 0.95 } : {}}
-                  onClick={() => {
-                    if (!disabledByCreating) handleClassClick(key);
-                  }}
+                  whileHover={!isActive ? { scale: 1.05 } : {}}
+                  whileTap={!isActive ? { scale: 0.95 } : {}}
+                  onClick={() => handleClassClick(key)}
                 >
                   <Card
                     sx={{
@@ -553,31 +431,40 @@ const StartSession = () => {
                       justifyContent: "center",
                       p: 2,
                       opacity:
-                        (creatingSession && !isActive) ||
-                        (!isActive && (running || status === "awaiting_screenshot"))
+                        !isActive &&
+                        (running || status === "awaiting_screenshot")
                           ? 0.5
                           : 1,
                       pointerEvents:
-                        creatingSession || (!isActive && (running || status === "awaiting_screenshot"))
+                        !isActive &&
+                        (running || status === "awaiting_screenshot")
                           ? "none"
                           : "auto",
                     }}
                   >
                     <CardContent sx={{ textAlign: "center", width: "100%" }}>
                       {classConfig.icon}
-                      <Typography variant="h6" sx={{ mt: 1, fontWeight: 700 }}>
+                      <Typography
+                        variant="h6"
+                        sx={{ mt: 1, fontWeight: 700 }}
+                      >
                         {key}
                       </Typography>
 
                       {!isActive && (
-                        <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.9 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ mt: 0.5, opacity: 0.9 }}
+                        >
                           ₱{classConfig.rate} ({classConfig.duration} mins)
                         </Typography>
                       )}
 
                       {isActive && status === "ongoing" && (
                         <Box sx={{ mt: 2 }}>
-                          <Typography variant="h5">⏱ {formatMMSS(elapsedSeconds)}</Typography>
+                          <Typography variant="h5">
+                            ⏱ {formatMMSS(elapsedSeconds)}
+                          </Typography>
 
                           {/* 💰 Cash bag animation with fixed earning */}
                           <motion.div
@@ -613,24 +500,40 @@ const StartSession = () => {
                               justifyContent: "center",
                             }}
                           >
-                            <Button variant="contained" color="success" onClick={handleStop}>
+                            <Button
+                              variant="contained"
+                              color="success"
+                              onClick={handleStop}
+                            >
                               Stop
                             </Button>
-                            <Button variant="contained" color="error" onClick={() => setCancelDialog(true)}>
+                            <Button
+                              variant="contained"
+                              color="error"
+                              onClick={() => setCancelDialog(true)}
+                            >
                               Cancel
                             </Button>
-                            {key === "Vietnamese Class" && elapsedSeconds >= 900 && (
-                              <Button variant="contained" color="warning" onClick={handleHalfPay}>
-                                Half Pay
-                              </Button>
-                            )}
+                            {key === "Vietnamese Class" &&
+                              elapsedSeconds >= 900 && (
+                                <Button
+                                  variant="contained"
+                                  color="warning"
+                                  onClick={handleHalfPay}
+                                >
+                                  Half Pay
+                                </Button>
+                              )}
                           </Box>
                         </Box>
                       )}
 
                       {isActive && status === "awaiting_screenshot" && (
                         <Box sx={{ mt: 2, width: "100%" }}>
-                          <Typography variant="body1" sx={{ mb: 1, fontWeight: "bold" }}>
+                          <Typography
+                            variant="body1"
+                            sx={{ mb: 1, fontWeight: "bold" }}
+                          >
                             Please upload screenshot to complete
                           </Typography>
                           <input
@@ -641,11 +544,22 @@ const StartSession = () => {
                           />
                           {uploading ? (
                             <Box sx={{ width: "100%", mt: 1 }}>
-                              <Typography variant="body2">Uploading... {Math.round(uploadProgress)}%</Typography>
-                              <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 8, borderRadius: 5, mt: 1 }} />
+                              <Typography variant="body2">
+                                Uploading... {Math.round(uploadProgress)}%
+                              </Typography>
+                              <LinearProgress
+                                variant="determinate"
+                                value={uploadProgress}
+                                sx={{ height: 8, borderRadius: 5, mt: 1 }}
+                              />
                             </Box>
                           ) : (
-                            <Button variant="contained" color="primary" onClick={handleUpload} disabled={!screenshotFile}>
+                            <Button
+                              variant="contained"
+                              color="primary"
+                              onClick={handleUpload}
+                              disabled={!screenshotFile}
+                            >
                               Upload Screenshot
                             </Button>
                           )}
@@ -691,7 +605,10 @@ const StartSession = () => {
           <Box sx={{ display: "flex", gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Hours</InputLabel>
-              <Select value={selectedHours} onChange={(e) => setSelectedHours(e.target.value)}>
+              <Select
+                value={selectedHours}
+                onChange={(e) => setSelectedHours(e.target.value)}
+              >
                 {[...Array(6).keys()].map((h) => (
                   <MenuItem key={h} value={h}>
                     {h}
@@ -701,7 +618,10 @@ const StartSession = () => {
             </FormControl>
             <FormControl fullWidth>
               <InputLabel>Minutes</InputLabel>
-              <Select value={selectedMinutes} onChange={(e) => setSelectedMinutes(e.target.value)}>
+              <Select
+                value={selectedMinutes}
+                onChange={(e) => setSelectedMinutes(e.target.value)}
+              >
                 {[...Array(13).keys()].map((m) => (
                   <MenuItem key={m * 5} value={m * 5}>
                     {m * 5}
@@ -716,7 +636,7 @@ const StartSession = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button variant="contained" color="primary" onClick={confirmStart} disabled={creatingSession}>
+          <Button variant="contained" color="primary" onClick={confirmStart}>
             Start
           </Button>
         </DialogActions>
@@ -727,7 +647,7 @@ const StartSession = () => {
         <DialogTitle>Start {classType}?</DialogTitle>
         <DialogActions>
           <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={startFixedClass} disabled={creatingSession}>
+          <Button variant="contained" onClick={startFixedClass}>
             Start
           </Button>
         </DialogActions>
@@ -740,8 +660,8 @@ const StartSession = () => {
           <Button onClick={() => setCancelDialog(false)}>No</Button>
           <Button variant="contained" color="error" onClick={handleCancel}>
             Yes, Cancel
-          </Button>
-        </DialogActions>
+          </Button> 
+        </DialogActions> 
       </Dialog>
     </TeacherLayout>
   );
