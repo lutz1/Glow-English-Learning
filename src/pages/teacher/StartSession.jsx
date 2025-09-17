@@ -154,7 +154,6 @@ const StartSession = () => {
       }
     };
     fetchSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   // Timer effect
@@ -183,7 +182,7 @@ const StartSession = () => {
       }, 1000);
     }
     return () => intervalRef.current && clearInterval(intervalRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [running, targetSeconds, sessionId, status]);
 
   const formatMMSS = (seconds) => {
