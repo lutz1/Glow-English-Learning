@@ -1,3 +1,4 @@
+// src/pages/teacher/StartSession.jsx
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -17,6 +18,7 @@ import {
   LinearProgress,
   Divider,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import {
@@ -39,6 +41,8 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  runTransaction,
+  setDoc,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
@@ -102,6 +106,9 @@ const StartSession = () => {
   const [selectedMinutes, setSelectedMinutes] = useState(0);
   const [cancelDialog, setCancelDialog] = useState(false);
 
+  // Prevent duplicate session creation
+  const [creatingSession, setCreatingSession] = useState(false);
+
   const startTsRef = useRef(null);
   const intervalRef = useRef(null);
 
@@ -109,23 +116,33 @@ const StartSession = () => {
   useEffect(() => {
     if (!currentUser) return;
     const fetchSession = async () => {
-      const q = query(
-        collection(db, "sessions"),
-        where("teacherId", "==", currentUser.uid),
-        where("status", "in", ["ongoing", "awaiting_screenshot"])
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const docData = snap.docs[0];
-        const data = docData.data();
+      try {
+        const q = query(
+          collection(db, "sessions"),
+          where("teacherId", "==", currentUser.uid),
+          where("status", "in", ["ongoing", "awaiting_screenshot"])
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docData = snap.docs[0];
+          const data = docData.data();
 
-        setSessionId(docData.id);
-        setClassType(data.classType);
-        setTargetSeconds(data.durationSeconds);
-        startTsRef.current = data.startTime?.toDate().getTime();
-        setElapsedSeconds(Math.floor((Date.now() - startTsRef.current) / 1000));
-        setStatus(data.status);
-        setRunning(data.status === "ongoing");
+          setSessionId(docData.id);
+          setClassType(data.classType);
+          setTargetSeconds(data.durationSeconds);
+          // If startTime is serverTimestamp stored, convert to ms
+          if (data.startTime && data.startTime.toDate) {
+            startTsRef.current = data.startTime.toDate().getTime();
+            setElapsedSeconds(Math.floor((Date.now() - startTsRef.current) / 1000));
+          } else {
+            startTsRef.current = Date.now();
+            setElapsedSeconds(0);
+          }
+          setStatus(data.status);
+          setRunning(data.status === "ongoing");
+        }
+      } catch (err) {
+        console.error("Error restoring session:", err);
       }
     };
     fetchSession();
@@ -149,7 +166,7 @@ const StartSession = () => {
             updateDoc(doc(db, "sessions", sessionId), {
               status: "awaiting_screenshot",
               endTime: serverTimestamp(), // ✅ record endTime
-            });
+            }).catch((e) => console.warn("Failed to mark awaiting_screenshot:", e));
           }
         }
       }, 1000);
@@ -164,19 +181,25 @@ const StartSession = () => {
   };
 
   const handleClassClick = async (key) => {
-    if (running || status === "ongoing" || status === "awaiting_screenshot")
-      return;
+    // block when creating session or an active session exists in UI
+    if (creatingSession) return;
+    if (running || status === "ongoing" || status === "awaiting_screenshot") return;
 
-    // 🔍 Prevent duplicate session creation
-    const q = query(
-      collection(db, "sessions"),
-      where("teacherId", "==", currentUser.uid),
-      where("status", "in", ["ongoing", "awaiting_screenshot"])
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      alert("⚠️ You already have an active session.");
-      return;
+    // Quick check for any active session server-side (non-atomic check)
+    try {
+      const q = query(
+        collection(db, "sessions"),
+        where("teacherId", "==", currentUser.uid),
+        where("status", "in", ["ongoing", "awaiting_screenshot"])
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        alert("⚠️ You already have an active session.");
+        return;
+      }
+    } catch (err) {
+      console.error("Error checking active session:", err);
+      // proceed to show dialogs — transaction during creation will still protect
     }
 
     const classConfig = CLASS_SETTINGS[key];
@@ -190,147 +213,225 @@ const StartSession = () => {
     }
   };
 
+  // Helper to create a session atomically using a lock doc
+  const createSessionTransaction = async (sessionPayload) => {
+    if (!currentUser) throw new Error("No user");
+    const lockRef = doc(db, "sessionLocks", currentUser.uid);
+    // create a new doc ref with id we can reference later
+    const newSessionRef = doc(collection(db, "sessions"));
+
+    await runTransaction(db, async (tx) => {
+      const lockSnap = await tx.get(lockRef);
+      if (lockSnap.exists()) {
+        // another session already locked/active
+        throw new Error("ACTIVE_SESSION_LOCKED");
+      }
+
+      // write session doc & lock doc atomically
+      tx.set(newSessionRef, sessionPayload);
+      tx.set(lockRef, { sessionId: newSessionRef.id, createdAt: serverTimestamp() });
+    });
+
+    return newSessionRef.id;
+  };
+
   // Start fixed-duration class
   const startFixedClass = async () => {
-    if (!currentUser) return;
+    if (!currentUser || creatingSession) return;
+    setCreatingSession(true);
 
-    // 🔍 Prevent duplicate session creation
-    const q = query(
-      collection(db, "sessions"),
-      where("teacherId", "==", currentUser.uid),
-      where("status", "in", ["ongoing", "awaiting_screenshot"])
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      alert("⚠️ You already have an active session.");
+    try {
+      // prepare payload
+      const classConfig = CLASS_SETTINGS[classType];
+      const totalMinutes = classConfig.duration;
+      const totalEarnings = classConfig.rate;
+      const payload = {
+        teacherId: currentUser.uid,
+        classType,
+        rate: classConfig.rate,
+        durationSeconds: totalMinutes * 60,
+        totalEarnings,
+        startTime: serverTimestamp(),
+        status: "ongoing",
+      };
+
+      // Use transaction to create session + lock atomically
+      let newId;
+      try {
+        newId = await createSessionTransaction(payload);
+      } catch (err) {
+        if (err.message === "ACTIVE_SESSION_LOCKED") {
+          alert("⚠️ You already have an active session (created elsewhere).");
+          setConfirmDialog(false);
+          return;
+        }
+        throw err;
+      }
+
+      // success -> update local UI
+      setSessionId(newId);
+      setTargetSeconds(totalMinutes * 60);
+      setElapsedSeconds(0);
+      startTsRef.current = Date.now();
+      setRunning(true);
+      setStatus("ongoing");
       setConfirmDialog(false);
-      return;
+    } catch (err) {
+      console.error("Error starting fixed class:", err);
+      alert("Failed to start session. See console for details.");
+    } finally {
+      setCreatingSession(false);
     }
-
-    const classConfig = CLASS_SETTINGS[classType];
-    const totalMinutes = classConfig.duration;
-    const totalEarnings = classConfig.rate;
-
-    setTargetSeconds(totalMinutes * 60);
-    setElapsedSeconds(0);
-    startTsRef.current = Date.now();
-    setRunning(true);
-    setStatus("ongoing");
-
-    const docRef = await addDoc(collection(db, "sessions"), {
-      teacherId: currentUser.uid,
-      classType,
-      rate: classConfig.rate,
-      durationSeconds: totalMinutes * 60,
-      totalEarnings,
-      startTime: serverTimestamp(),
-      status: "ongoing",
-    });
-    setSessionId(docRef.id);
-    setConfirmDialog(false); // ✅ close confirm dialog
   };
 
   // Start custom-duration class
   const confirmStart = async () => {
-    if (!currentUser) return;
+    if (!currentUser || creatingSession) return;
+    setCreatingSession(true);
 
-    // 🔍 Prevent duplicate session creation
-    const q = query(
-      collection(db, "sessions"),
-      where("teacherId", "==", currentUser.uid),
-      where("status", "in", ["ongoing", "awaiting_screenshot"])
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      alert("⚠️ You already have an active session.");
+    try {
+      const classConfig = CLASS_SETTINGS[classType];
+      const totalMinutes = selectedHours * 60 + selectedMinutes;
+      if (totalMinutes < classConfig.duration) {
+        alert(`⚠️ Minimum duration is ${classConfig.duration} minutes`);
+        setCreatingSession(false);
+        return;
+      }
+
+      const perMinuteRate = classConfig.rate / classConfig.duration;
+      const totalEarnings = perMinuteRate * totalMinutes;
+
+      const payload = {
+        teacherId: currentUser.uid,
+        classType,
+        rate: classConfig.rate,
+        durationSeconds: totalMinutes * 60,
+        totalEarnings,
+        startTime: serverTimestamp(),
+        status: "ongoing",
+      };
+
+      let newId;
+      try {
+        newId = await createSessionTransaction(payload);
+      } catch (err) {
+        if (err.message === "ACTIVE_SESSION_LOCKED") {
+          alert("⚠️ You already have an active session (created elsewhere).");
+          setOpenDialog(false);
+          return;
+        }
+        throw err;
+      }
+
+      // success -> update local UI
+      setSessionId(newId);
+      setTargetSeconds(totalMinutes * 60);
+      setElapsedSeconds(0);
+      startTsRef.current = Date.now();
+      setRunning(true);
+      setStatus("ongoing");
       setOpenDialog(false);
-      return;
+    } catch (err) {
+      console.error("Error starting custom class:", err);
+      alert("Failed to start session. See console for details.");
+    } finally {
+      setCreatingSession(false);
     }
-
-    const classConfig = CLASS_SETTINGS[classType];
-    const totalMinutes = selectedHours * 60 + selectedMinutes;
-    if (totalMinutes < classConfig.duration) {
-      alert(`⚠️ Minimum duration is ${classConfig.duration} minutes`);
-      return;
-    }
-
-    const perMinuteRate = classConfig.rate / classConfig.duration;
-    const totalEarnings = perMinuteRate * totalMinutes;
-
-    setTargetSeconds(totalMinutes * 60);
-    setElapsedSeconds(0);
-    startTsRef.current = Date.now();
-    setRunning(true);
-    setStatus("ongoing");
-    setOpenDialog(false);
-
-    const docRef = await addDoc(collection(db, "sessions"), {
-      teacherId: currentUser.uid,
-      classType,
-      rate: classConfig.rate,
-      durationSeconds: totalMinutes * 60,
-      totalEarnings,
-      startTime: serverTimestamp(),
-      status: "ongoing",
-    });
-    setSessionId(docRef.id);
   };
 
   // Stop class
   const handleStop = async () => {
-    if (sessionId) {
+    if (!sessionId) return;
+    try {
       clearInterval(intervalRef.current);
       setRunning(false);
       setStatus("awaiting_screenshot");
+
       await updateDoc(doc(db, "sessions", sessionId), {
         status: "awaiting_screenshot",
         actualDuration: elapsedSeconds,
-        actualEarnings: CLASS_SETTINGS[classType].rate,
+        // keep actualEarnings simple (you can compute differently if needed)
+        actualEarnings: CLASS_SETTINGS[classType]?.rate || 0,
         endTime: serverTimestamp(),
       });
-      setConfirmDialog(false); // ✅ close dialog if used
+
+      // remove lock so teacher can start another session while awaiting upload/completion
+      try {
+        await deleteDoc(doc(db, "sessionLocks", currentUser.uid));
+      } catch (err) {
+        console.warn("Failed to remove session lock on stop:", err);
+      }
+    } catch (err) {
+      console.error("Error stopping session:", err);
+      alert("Failed to stop session. See console for details.");
+    } finally {
+      setConfirmDialog(false);
     }
   };
 
   // Cancel class
   const handleCancel = async () => {
-    if (sessionId) {
+    if (!sessionId) {
+      setCancelDialog(false);
+      return;
+    }
+    try {
       await deleteDoc(doc(db, "sessions", sessionId));
+      // remove lock
+      try {
+        await deleteDoc(doc(db, "sessionLocks", currentUser.uid));
+      } catch (err) {
+        console.warn("Failed to remove session lock on cancel:", err);
+      }
+
       clearInterval(intervalRef.current);
       setRunning(false);
       setClassType("");
       setStatus(null);
       setSessionId(null);
       setElapsedSeconds(0);
+    } catch (err) {
+      console.error("Error cancelling session:", err);
+      alert("Failed to cancel session. See console for details.");
+    } finally {
+      setCancelDialog(false);
     }
-    setCancelDialog(false); // ✅ close cancel dialog
   };
 
   // Half pay (Vietnamese class special case)
   const handleHalfPay = async () => {
     if (sessionId && classType === "Vietnamese Class") {
-      clearInterval(intervalRef.current);
-      setRunning(false);
-      setStatus("awaiting_screenshot");
+      try {
+        clearInterval(intervalRef.current);
+        setRunning(false);
+        setStatus("awaiting_screenshot");
 
-      await updateDoc(doc(db, "sessions", sessionId), {
-        status: "awaiting_screenshot",
-        actualDuration: elapsedSeconds,
-        actualEarnings: CLASS_SETTINGS[classType].rate / 2,
-        halfPay: true,
-        endTime: serverTimestamp(),
-      });
+        await updateDoc(doc(db, "sessions", sessionId), {
+          status: "awaiting_screenshot",
+          actualDuration: elapsedSeconds,
+          actualEarnings: (CLASS_SETTINGS[classType].rate || 0) / 2,
+          halfPay: true,
+          endTime: serverTimestamp(),
+        });
+
+        // remove lock for next session
+        try {
+          await deleteDoc(doc(db, "sessionLocks", currentUser.uid));
+        } catch (err) {
+          console.warn("Failed to remove session lock on half pay:", err);
+        }
+      } catch (err) {
+        console.error("Error setting half pay:", err);
+      }
     }
   };
 
   // ✅ Upload screenshot with progress
   const handleUpload = async () => {
-    if (!screenshotFile || !sessionId) return;
+    if (!screenshotFile || !sessionId || !currentUser) return;
 
     try {
-      const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${
-        screenshotFile.name
-      }`;
+      const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${screenshotFile.name}`;
       const storageRef = ref(storage, filePath);
 
       setUploading(true);
@@ -341,8 +442,7 @@ const StartSession = () => {
       uploadTask.on(
         "state_changed",
         (snapshot) => {
-          const progress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setUploadProgress(progress);
         },
         (error) => {
@@ -358,6 +458,13 @@ const StartSession = () => {
             screenshotUrl: downloadURL,
             screenshotName: screenshotFile.name,
           });
+
+          // remove lock now that session is fully completed
+          try {
+            await deleteDoc(doc(db, "sessionLocks", currentUser.uid));
+          } catch (err) {
+            console.warn("Failed to remove session lock after upload:", err);
+          }
 
           setStatus("completed");
           setClassType("");
@@ -385,17 +492,10 @@ const StartSession = () => {
             p: 4,
             borderRadius: 3,
             backdropFilter: "blur(12px)",
-            background:
-              "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(245,245,245,0.7))",
+            background: "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(245,245,245,0.7))",
           }}
         >
-          <Typography
-            variant="h4"
-            mb={4}
-            fontWeight="bold"
-            align="center"
-            sx={{ color: "#333" }}
-          >
+          <Typography variant="h4" mb={4} fontWeight="bold" align="center" sx={{ color: "#333" }}>
             🎓 Start a Teaching Session
           </Typography>
 
@@ -407,9 +507,7 @@ const StartSession = () => {
             }}
           >
             {Object.keys(CLASS_SETTINGS).map((key) => {
-              const isActive =
-                classType === key &&
-                (status === "ongoing" || status === "awaiting_screenshot");
+              const isActive = classType === key && (status === "ongoing" || status === "awaiting_screenshot");
               const classConfig = CLASS_SETTINGS[key];
 
               return (
@@ -417,7 +515,6 @@ const StartSession = () => {
                   key={key}
                   whileHover={!isActive ? { scale: 1.05 } : {}}
                   whileTap={!isActive ? { scale: 0.95 } : {}}
-                  onClick={() => handleClassClick(key)}
                 >
                   <Card
                     sx={{
@@ -430,136 +527,70 @@ const StartSession = () => {
                       alignItems: "center",
                       justifyContent: "center",
                       p: 2,
-                      opacity:
-                        !isActive &&
-                        (running || status === "awaiting_screenshot")
-                          ? 0.5
-                          : 1,
-                      pointerEvents:
-                        !isActive &&
-                        (running || status === "awaiting_screenshot")
-                          ? "none"
-                          : "auto",
+                      opacity: !isActive && (running || status === "awaiting_screenshot") ? 0.5 : 1,
+                      pointerEvents: !isActive && (running || status === "awaiting_screenshot") ? "none" : "auto",
+                      cursor: creatingSession ? "not-allowed" : "pointer",
+                    }}
+                    onClick={() => {
+                      if (creatingSession) return;
+                      handleClassClick(key);
                     }}
                   >
                     <CardContent sx={{ textAlign: "center", width: "100%" }}>
                       {classConfig.icon}
-                      <Typography
-                        variant="h6"
-                        sx={{ mt: 1, fontWeight: 700 }}
-                      >
+                      <Typography variant="h6" sx={{ mt: 1, fontWeight: 700 }}>
                         {key}
                       </Typography>
 
                       {!isActive && (
-                        <Typography
-                          variant="body2"
-                          sx={{ mt: 0.5, opacity: 0.9 }}
-                        >
+                        <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.9 }}>
                           ₱{classConfig.rate} ({classConfig.duration} mins)
                         </Typography>
                       )}
 
                       {isActive && status === "ongoing" && (
                         <Box sx={{ mt: 2 }}>
-                          <Typography variant="h5">
-                            ⏱ {formatMMSS(elapsedSeconds)}
-                          </Typography>
+                          <Typography variant="h5">⏱ {formatMMSS(elapsedSeconds)}</Typography>
 
-                          {/* 💰 Cash bag animation with fixed earning */}
                           <motion.div
-                            animate={{
-                              y: [0, -10, 0],
-                              scale: [1, 1.2, 1],
-                            }}
-                            transition={{
-                              duration: 1,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }}
+                            animate={{ y: [0, -10, 0], scale: [1, 1.2, 1] }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
                             style={{ marginTop: "12px" }}
                           >
-                            <Typography
-                              variant="h5"
-                              sx={{
-                                fontWeight: "bold",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                              }}
-                            >
+                            <Typography variant="h5" sx={{ fontWeight: "bold", display: "flex", alignItems: "center", gap: 1 }}>
                               💰 ₱{classConfig.rate}
                             </Typography>
                           </motion.div>
 
-                          <Box
-                            sx={{
-                              mt: 2,
-                              display: "flex",
-                              gap: 1,
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Button
-                              variant="contained"
-                              color="success"
-                              onClick={handleStop}
-                            >
+                          <Box sx={{ mt: 2, display: "flex", gap: 1, justifyContent: "center" }}>
+                            <Button variant="contained" color="success" onClick={handleStop}>
                               Stop
                             </Button>
-                            <Button
-                              variant="contained"
-                              color="error"
-                              onClick={() => setCancelDialog(true)}
-                            >
+                            <Button variant="contained" color="error" onClick={() => setCancelDialog(true)}>
                               Cancel
                             </Button>
-                            {key === "Vietnamese Class" &&
-                              elapsedSeconds >= 900 && (
-                                <Button
-                                  variant="contained"
-                                  color="warning"
-                                  onClick={handleHalfPay}
-                                >
-                                  Half Pay
-                                </Button>
-                              )}
+                            {key === "Vietnamese Class" && elapsedSeconds >= 900 && (
+                              <Button variant="contained" color="warning" onClick={handleHalfPay}>
+                                Half Pay
+                              </Button>
+                            )}
                           </Box>
                         </Box>
                       )}
 
                       {isActive && status === "awaiting_screenshot" && (
                         <Box sx={{ mt: 2, width: "100%" }}>
-                          <Typography
-                            variant="body1"
-                            sx={{ mb: 1, fontWeight: "bold" }}
-                          >
+                          <Typography variant="body1" sx={{ mb: 1, fontWeight: "bold" }}>
                             Please upload screenshot to complete
                           </Typography>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => setScreenshotFile(e.target.files[0])}
-                            style={{ marginBottom: "10px" }}
-                          />
+                          <input type="file" accept="image/*" onChange={(e) => setScreenshotFile(e.target.files[0])} style={{ marginBottom: "10px" }} />
                           {uploading ? (
                             <Box sx={{ width: "100%", mt: 1 }}>
-                              <Typography variant="body2">
-                                Uploading... {Math.round(uploadProgress)}%
-                              </Typography>
-                              <LinearProgress
-                                variant="determinate"
-                                value={uploadProgress}
-                                sx={{ height: 8, borderRadius: 5, mt: 1 }}
-                              />
+                              <Typography variant="body2">Uploading... {Math.round(uploadProgress)}%</Typography>
+                              <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 8, borderRadius: 5, mt: 1 }} />
                             </Box>
                           ) : (
-                            <Button
-                              variant="contained"
-                              color="primary"
-                              onClick={handleUpload}
-                              disabled={!screenshotFile}
-                            >
+                            <Button variant="contained" color="primary" onClick={handleUpload} disabled={!screenshotFile}>
                               Upload Screenshot
                             </Button>
                           )}
@@ -605,10 +636,7 @@ const StartSession = () => {
           <Box sx={{ display: "flex", gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Hours</InputLabel>
-              <Select
-                value={selectedHours}
-                onChange={(e) => setSelectedHours(e.target.value)}
-              >
+              <Select value={selectedHours} onChange={(e) => setSelectedHours(e.target.value)}>
                 {[...Array(6).keys()].map((h) => (
                   <MenuItem key={h} value={h}>
                     {h}
@@ -618,10 +646,7 @@ const StartSession = () => {
             </FormControl>
             <FormControl fullWidth>
               <InputLabel>Minutes</InputLabel>
-              <Select
-                value={selectedMinutes}
-                onChange={(e) => setSelectedMinutes(e.target.value)}
-              >
+              <Select value={selectedMinutes} onChange={(e) => setSelectedMinutes(e.target.value)}>
                 {[...Array(13).keys()].map((m) => (
                   <MenuItem key={m * 5} value={m * 5}>
                     {m * 5}
@@ -635,9 +660,17 @@ const StartSession = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button variant="contained" color="primary" onClick={confirmStart}>
-            Start
+          <Button onClick={() => setOpenDialog(false)} disabled={creatingSession}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={confirmStart}
+            disabled={creatingSession}
+            startIcon={creatingSession ? <CircularProgress size={18} /> : null}
+          >
+            {creatingSession ? "Starting..." : "Start"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -646,9 +679,16 @@ const StartSession = () => {
       <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
         <DialogTitle>Start {classType}?</DialogTitle>
         <DialogActions>
-          <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={startFixedClass}>
-            Start
+          <Button onClick={() => setConfirmDialog(false)} disabled={creatingSession}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={startFixedClass}
+            disabled={creatingSession}
+            startIcon={creatingSession ? <CircularProgress size={18} /> : null}
+          >
+            {creatingSession ? "Starting..." : "Start"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -657,11 +697,13 @@ const StartSession = () => {
       <Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
         <DialogTitle>Do you want to cancel this session?</DialogTitle>
         <DialogActions>
-          <Button onClick={() => setCancelDialog(false)}>No</Button>
-          <Button variant="contained" color="error" onClick={handleCancel}>
+          <Button onClick={() => setCancelDialog(false)} disabled={creatingSession}>
+            No
+          </Button>
+          <Button variant="contained" color="error" onClick={handleCancel} disabled={creatingSession}>
             Yes, Cancel
-          </Button> 
-        </DialogActions> 
+          </Button>
+        </DialogActions>
       </Dialog>
     </TeacherLayout>
   );
