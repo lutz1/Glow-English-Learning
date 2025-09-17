@@ -570,7 +570,7 @@ const Dashboard = () => {
                         value={latestRange.start}
                         onChange={handleLatestStartChange}
                         slotProps={{ textField: { size: "small", sx: { bgcolor: "#fff", borderRadius: 1 } } }}
-                      />
+                      /> 
                       <DatePicker
                         label="End Date"
                         value={latestRange.end}
