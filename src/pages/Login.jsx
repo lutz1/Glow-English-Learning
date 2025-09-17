@@ -24,6 +24,12 @@ import {
 import { useAuth } from "../context/AuthContext";
 import Swal from "sweetalert2";
 
+const images = [
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQU7_PEPICNvmMgpC7KpeDcXSC76ppP1_QEU3u85LFj2PaA9UhDPMC1YYJQTEjmEUZREbQ&usqp=CAU",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQSH5Wb6iE9rzEsfARpIhHGwYvWZ-BJlcPKlA&s",
+  "https://i.pinimg.com/736x/f7/0c/5d/f70c5de79a06bc2db6db97ce72a9f0ee.jpg"
+];
+
 const Login = () => {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
@@ -36,6 +42,16 @@ const Login = () => {
   const [contacting, setContacting] = useState(false);
   const [contactSuccess, setContactSuccess] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
+
+  const [currentImage, setCurrentImage] = useState(0);
+
+  // 🔄 Auto-change background images
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImage((prev) => (prev + 1) % images.length);
+    }, 6000); // 6s interval
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!loading && currentUser?.role) {
@@ -98,7 +114,7 @@ const Login = () => {
       // ❌ Error alert with logo
       Swal.fire({
         imageUrl: require("../assets/logo.jpg"),
-        borderRadius : "10px",
+        borderRadius: "10px",
         imageWidth: 80,
         imageHeight: 80,
         imageAlt: "Glow English Logo",
@@ -141,7 +157,7 @@ const Login = () => {
     if (!email.trim()) {
       Swal.fire({
         imageUrl: require("../assets/logo.jpg"),
-        borderRadius : "10px",
+        borderRadius: "10px",
         imageWidth: 80,
         imageHeight: 80,
         imageAlt: "Glow English Logo",
@@ -158,7 +174,7 @@ const Login = () => {
       if (hasPendingRequest) {
         Swal.fire({
           imageUrl: require("../assets/logo.jpg"),
-          borderRadius : "10px",
+          borderRadius: "10px",
           imageWidth: 80,
           imageHeight: 80,
           imageAlt: "Glow English Logo",
@@ -180,7 +196,7 @@ const Login = () => {
       // ✅ Success popup with logo
       Swal.fire({
         imageUrl: require("../assets/logo.jpg"),
-        borderRadius : "10px",
+        borderRadius: "10px",
         imageWidth: 80,
         imageHeight: 80,
         imageAlt: "Glow English Logo",
@@ -220,8 +236,7 @@ const Login = () => {
         alignItems="center"
         height="100vh"
         sx={{
-          background: "linear-gradient(135deg, #1e3c72, #2a5298)",
-          filter: "blur(6px)",
+          background: "black",
         }}
       >
         <CircularProgress sx={{ color: "#fff" }} />
@@ -236,20 +251,32 @@ const Login = () => {
       alignItems="center"
       minHeight="100vh"
       sx={{
-        background: "linear-gradient(135deg, #1e3c72, #2a5298, #1e3c72)",
-        backgroundSize: "400% 400%",
-        animation: "softGradient 20s ease infinite",
-        overflow: "hidden",
         position: "relative",
+        overflow: "hidden",
       }}
     >
-      {/* Blurred background overlay */}
+      {/* Background Carousel */}
+      {images.map((img, index) => (
+        <Box
+          key={index}
+          sx={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: `url(${img})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            opacity: currentImage === index ? 1 : 0,
+            transition: "opacity 2s ease-in-out",
+          }}
+        />
+      ))}
+
+      {/* Blurred overlay */}
       <Box
         sx={{
           position: "absolute",
-          width: "100%",
-          height: "100%",
-          backdropFilter: "blur(8px)",
+          inset: 0,
+          backdropFilter: "blur(8px) brightness(0.6)",
           zIndex: 0,
         }}
       />
@@ -417,7 +444,11 @@ const Login = () => {
               onClick={handleContactAdmin}
               disabled={contacting || hasPendingRequest}
             >
-              {contacting ? "Sending..." : hasPendingRequest ? "Request Pending" : "Contact Admin"}
+              {contacting
+                ? "Sending..."
+                : hasPendingRequest
+                ? "Request Pending"
+                : "Contact Admin"}
             </Button>
           </Box>
         </Box>
@@ -429,11 +460,6 @@ const Login = () => {
             0% { transform: translateY(0px); }
             50% { transform: translateY(-8px); }
             100% { transform: translateY(0px); }
-          }
-          @keyframes softGradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
           }
         `}
       </style>
