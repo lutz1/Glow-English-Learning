@@ -1,4 +1,4 @@
-// src/pages/admin/Payroll.jsx
+ // src/pages/admin/Payroll.jsx
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -145,7 +145,6 @@ const Payroll = () => {
         cameraStream.getTracks().forEach((t) => t.stop());
       }
     };
-    
   }, [teacherViewOpen]);
 
   const filterByDate = (list, from, to) => {
@@ -208,6 +207,31 @@ const Payroll = () => {
     setConfirmOpen(true);
   };
 
+  // Helper: convert a Firebase download URL to storage path ref
+  // Example download URL:
+  // https://firebasestorage.googleapis.com/v0/b/<bucket>/o/screenshots%2F<uid>%2Ffile.png?alt=media&token=...
+  // We extract the encoded path after /o/ and decode it -> screenshots/<uid>/file.png
+  const getStorageRefFromDownloadUrl = (url) => {
+    if (!url || typeof url !== "string") return null;
+    // gs:// style
+    if (url.startsWith("gs://")) {
+      return storageRef(storage, url);
+    }
+    try {
+      const u = new URL(url);
+      // match the path after /o/
+      const pathMatch = u.pathname.match(/\/o\/(.+)$/);
+      if (pathMatch && pathMatch[1]) {
+        const encodedPath = pathMatch[1]; // e.g. screenshots%2Fuid%2Ffile.png
+        const decodedPath = decodeURIComponent(encodedPath); // screenshots/uid/file.png
+        return storageRef(storage, decodedPath);
+      }
+    } catch (e) {
+      console.warn("getStorageRefFromDownloadUrl - invalid url", e);
+    }
+    return null;
+  };
+
   const deleteTeacherSessions = async () => {
     if (!selectedTeacherId) return;
     try {
@@ -221,9 +245,19 @@ const Payroll = () => {
         // delete screenshot from storage if exists
         if (sdata.screenshotUrl) {
           try {
-            await deleteObject(storageRef(storage, sdata.screenshotUrl));
+            const objRef = getStorageRefFromDownloadUrl(sdata.screenshotUrl);
+            if (objRef) {
+              await deleteObject(objRef);
+            } else {
+              // could not parse path; attempt naive ref (may fail)
+              try {
+                await deleteObject(storageRef(storage, sdata.screenshotUrl));
+              } catch (err2) {
+                console.warn("Could not delete screenshot via fallback ref:", err2);
+              }
+            }
           } catch (err) {
-            // log but keep going
+            // log but keep going with deleting doc
             console.warn("Could not delete screenshot from storage:", err);
           }
         }
@@ -247,7 +281,13 @@ const Payroll = () => {
       // delete screenshot in storage if exists
       if (screenshotUrl) {
         try {
-          await deleteObject(storageRef(storage, screenshotUrl));
+          const objRef = getStorageRefFromDownloadUrl(screenshotUrl);
+          if (objRef) {
+            await deleteObject(objRef);
+          } else {
+            // fallback attempt
+            await deleteObject(storageRef(storage, screenshotUrl));
+          }
         } catch (err) {
           console.warn("Failed to delete screenshot from storage:", err);
           // continue to delete doc anyway
