@@ -35,6 +35,17 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+// Recharts for the line chart
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip as ReTooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+
 // Define class type colors
 const classTypeColors = {
   "Chinese Class": { bgcolor: "#e53935", color: "#fff" },
@@ -73,12 +84,12 @@ const Dashboard = () => {
   const [totalPayroll, setTotalPayroll] = useState(0);
   const [pendingPayroll, setPendingPayroll] = useState(0);
   const [sessions, setSessions] = useState([]);
-  const [earningData, setEarningData] = useState([]);
+  const [earningData, setEarningData] = useState([]); // for chart (array of { label, earnings })
   const [topTeachers, setTopTeachers] = useState([]);
 
   // loading / UI
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("monthly");
+  const [period, setPeriod] = useState("monthly"); // 'weekly' | 'monthly'
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Latest Sessions date range (MUI pickers)
@@ -143,7 +154,7 @@ const Dashboard = () => {
     });
 
     return () => unsub();
-  
+    
   }, []);
 
   // --- Firestore: load sessions (live) ---
@@ -154,7 +165,7 @@ const Dashboard = () => {
       setSessions(all.slice(0, 200)); // keep reasonable limit
       setTotalPayroll(all.filter((s) => s.status === "completed").reduce((acc, s) => acc + (s.totalEarnings || 0), 0));
       setPendingPayroll(all.filter((s) => s.status === "pending").reduce((acc, s) => acc + (s.totalEarnings || 0), 0));
-      updateChartData(all);
+      // updateChartData will be invoked by effect below (sessions, period)
       setLoading(false);
     });
 
@@ -162,11 +173,55 @@ const Dashboard = () => {
     
   }, []);
 
-  // Update chart/top teachers when sessions/teachers/topRange/period change
+  // computeTopTeachers uses topRange (TextFields) — kept separate from latestRange
   useEffect(() => {
     computeTopTeachers();
-  
-  }, [sessions, teachersMap, topRange, period]);
+    
+  }, [sessions, teachersMap, topRange]);
+
+  // When sessions or period change, aggregate earnings for chart
+  useEffect(() => {
+    const completed = sessions.filter((s) => (s.status || "").toLowerCase() === "completed");
+    // Map keyed by numeric timestamp representing period start (week start or month start)
+    const grouped = {};
+
+    completed.forEach((s) => {
+      const ts = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
+      if (!ts) return;
+      if (period === "weekly") {
+        // compute week-start (Monday) for clearer weekly buckets
+        const day = ts.getDay(); // 0 Sun .. 6 Sat
+        // We'll pick Monday as week start: offset = (day + 6) % 7
+        const offset = (day + 6) % 7;
+        const weekStart = new Date(ts);
+        weekStart.setDate(ts.getDate() - offset);
+        weekStart.setHours(0, 0, 0, 0);
+        const key = weekStart.getTime();
+        grouped[key] = (grouped[key] || 0) + (s.totalEarnings || 0);
+      } else {
+        // monthly
+        const monthStart = new Date(ts.getFullYear(), ts.getMonth(), 1, 0, 0, 0, 0);
+        const key = monthStart.getTime();
+        grouped[key] = (grouped[key] || 0) + (s.totalEarnings || 0);
+      }
+    });
+
+    // convert to array sorted by key ascending
+    const arr = Object.entries(grouped)
+      .map(([key, earnings]) => {
+        const kNum = Number(key);
+        const d = new Date(kNum);
+        const label =
+          period === "weekly"
+            ? `Week of ${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+            : `${d.toLocaleDateString(undefined, { month: "short", year: "numeric" })}`;
+        return { key: kNum, label, earnings: Number(earnings.toFixed(2)) };
+      })
+      .sort((a, b) => a.key - b.key);
+
+    // If there are no data points, generate small placeholders (optional)
+    setEarningData(arr);
+  }, [sessions, period]);
 
   // Update filteredSessions whenever sessions, latestRange or status sorting changes
   const [filteredSessions, setFilteredSessions] = useState([]);
@@ -194,11 +249,11 @@ const Dashboard = () => {
     setFilteredSessions(filtered);
   }, [sessions, latestRange, statusSortAsc]);
 
-  // updateChartData (earnings per teacher per class type)
+  // updateChartData (earnings per teacher per class type) kept for other usages
   const updateChartData = (sessionsArray) => {
     const teacherData = {};
     sessionsArray
-      .filter((s) => s.status === "completed")
+      .filter((s) => (s.status || "").toLowerCase() === "completed")
       .forEach((s) => {
         const tName = teachersMap[s.teacherId]?.name || s.teacherName || s.teacherId;
         const classType = s.classType || "Default";
@@ -206,10 +261,11 @@ const Dashboard = () => {
         if (!teacherData[tName]) teacherData[tName] = { teacherName: tName };
         teacherData[tName][classType] = (teacherData[tName][classType] || 0) + earnings;
       });
-    setEarningData(Object.values(teacherData));
+    // not used by line chart but kept for potential stacked chart
+    setEarningData((prev) => prev); // no-op keep consistent
   };
 
-  // computeTopTeachers uses topRange (TextFields) — kept separate from latestRange
+  // computeTopTeachers
   const computeTopTeachers = () => {
     const { start, end } = (() => {
       if (topRange.start && topRange.end) {
@@ -228,7 +284,7 @@ const Dashboard = () => {
     })();
 
     const filtered = sessions.filter((s) => {
-      if (s.status !== "completed") return false;
+      if ((s.status || "").toLowerCase() !== "completed") return false;
       const ts = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
       if (!ts) return false;
       return ts >= start && ts <= end;
@@ -466,10 +522,10 @@ const Dashboard = () => {
             </Card>
           </Grid>
 
-          {/* EARNINGS SUMMARY PLACEHOLDER */}
+          {/* EARNINGS SUMMARY */}
           <Grid item xs={12} md={8}>
-            <Card sx={{ ...glassCard, height: 450, position: "relative", overflow: "hidden" }}>
-              <CardContent>
+            <Card sx={{ ...glassCard, height: 450 }}>
+              <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
                   <Typography variant="h6">Earnings Summary</Typography>
                   <ButtonGroup size="small">
@@ -478,30 +534,40 @@ const Dashboard = () => {
                   </ButtonGroup>
                 </Box>
 
-                <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
-                  Chart coming soon — analytics are being crafted. For now, earnings are summarized and Top Teachers can be exported by month or custom date range.
-                </Typography>
+                <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                  {/* Summaries */}
+                  <Box sx={{ display: "flex", gap: 2, mb: 2, alignItems: "center" }}>
+                    <Typography variant="subtitle2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                      Total (shown range): ₱{earningData.reduce((acc, d) => acc + (d.earnings || 0), 0).toFixed(2)}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
+                      Showing aggregated {period}
+                    </Typography>
+                  </Box>
 
-                <Box sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", bgcolor: "rgba(0,0,0,0.7)", zIndex: 10, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", backdropFilter: "blur(4px)", color: "#fff", textAlign: "center" }}>
-                  <div className="builder-animation">
-                    <span className="emoji">👷‍♂️</span>
-                    <span className="emoji">🔨</span>
-                  </div>
-                  <Typography variant="h5" sx={{ fontWeight: "bold", mt: 2, mb: 1, background: "linear-gradient(90deg, #64b5f6, #81c784, #ffb74d)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                    Feature Coming Soon
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>We’re building advanced analytics for you. Stay tuned 🚀</Typography>
+                  {/* Chart area */}
+                  <Box sx={{ flex: 1, minHeight: 240 }}>
+                    {earningData.length === 0 ? (
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+                        <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                          No completed-session earnings for the selected period.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={earningData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                          <XAxis dataKey="label" tick={{ fill: "#fff", fontSize: 12 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                          <YAxis tick={{ fill: "#fff", fontSize: 12 }} />
+                          <ReTooltip formatter={(value) => `₱${Number(value).toFixed(2)}`} labelStyle={{ color: "#fff" }} contentStyle={{ background: "#111", borderColor: "#333" }} />
+                          <Line type="monotone" dataKey="earnings" stroke="#64b5f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </Box>
                 </Box>
               </CardContent>
             </Card>
-
-            <style>{`
-              .builder-animation { display: flex; align-items: center; justify-content: center; font-size: 3rem; gap: 0.5rem; }
-              .builder-animation .emoji { display: inline-block; animation: bounce 1.5s infinite; }
-              .builder-animation .emoji:nth-child(2) { animation: hammer 1.2s infinite; }
-              @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-              @keyframes hammer { 0% { transform: rotate(0deg); } 25% { transform: rotate(-30deg); } 50% { transform: rotate(0deg); } 75% { transform: rotate(-30deg); } 100% { transform: rotate(0deg); } }
-            `}</style>
           </Grid>
 
           {/* TOP TEACHERS + date range + export PDF (kept separate controls) */}
@@ -570,7 +636,7 @@ const Dashboard = () => {
                         value={latestRange.start}
                         onChange={handleLatestStartChange}
                         slotProps={{ textField: { size: "small", sx: { bgcolor: "#fff", borderRadius: 1 } } }}
-                      /> 
+                      />
                       <DatePicker
                         label="End Date"
                         value={latestRange.end}
