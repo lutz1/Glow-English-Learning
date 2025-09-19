@@ -10,7 +10,11 @@ import {
   Avatar,
   Divider,
   Badge,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
+import { styled } from "@mui/system";
+import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PeopleIcon from "@mui/icons-material/People";
 import PaymentIcon from "@mui/icons-material/Payment";
@@ -23,6 +27,12 @@ import { db, auth } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, collection, query, where } from "firebase/firestore";
 
+// 🔑 Styled component for rotating menu button
+const RotatingIconButton = styled(IconButton)(({ collapsed }) => ({
+  transition: "transform 0.4s ease",
+  transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
+}));
+
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,6 +40,7 @@ const Sidebar = () => {
   const [adminName, setAdminName] = useState("");
   const [photoURL, setPhotoURL] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [collapsed, setCollapsed] = useState(false); // 🔑 collapse state
 
   // ✅ Real-time admin profile listener
   useEffect(() => {
@@ -108,24 +119,21 @@ const Sidebar = () => {
     <Drawer
       variant="permanent"
       sx={{
-        width: 250,
+        width: collapsed ? 80 : 250,
         flexShrink: 0,
+        transition: "width 0.4s ease", // 🔑 smooth animation
         [`& .MuiDrawer-paper`]: {
-          width: 250,
+          width: collapsed ? 80 : 250,
+          transition: "width 0.4s ease", // 🔑 smooth animation
           boxSizing: "border-box",
           background:
-            "linear-gradient(160deg, rgba(44,62,80,0.9), rgba(52,73,94,0.85), rgba(44,62,80,0.9))",
+            "linear-gradient(160deg, rgba(44,62,80,0.95), rgba(52,73,94,0.92), rgba(44,62,80,0.95))",
           backdropFilter: "blur(12px)",
           WebkitBackdropFilter: "blur(12px)",
           color: "#ecf0f1",
           borderRight: "1px solid rgba(255,255,255,0.1)",
-
-          // 🔑 Fix scrollbar issue
-          height: "100vh",       // force sidebar to fit viewport height
-          overflowY: "auto",     // enable scroll only if necessary
-          overflowX: "hidden",   // prevent horizontal scroll
-          scrollbarWidth: "none", // Firefox hide scrollbar
-          "&::-webkit-scrollbar": { display: "none" }, // Chrome/Brave hide scrollbar
+          height: "100vh",
+          overflowX: "hidden",
         },
       }}
     >
@@ -135,103 +143,125 @@ const Sidebar = () => {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          py: 4,
+          py: 3,
           px: 2,
-          textAlign: "center",
           background: "rgba(255, 255, 255, 0.05)",
           borderBottom: "1px solid rgba(255,255,255,0.1)",
         }}
       >
-        <Avatar
-          src={photoURL || undefined}
+        <RotatingIconButton
+          collapsed={collapsed ? 1 : 0}
+          onClick={() => setCollapsed(!collapsed)}
           sx={{
-            width: 70,
-            height: 70,
-            mb: 1.5,
-            bgcolor: "#3498db",
-            fontWeight: "bold",
-            boxShadow: "0px 4px 12px rgba(0,0,0,0.4)",
-          }}
-        >
-          {!photoURL && (adminName ? adminName[0].toUpperCase() : "A")}
-        </Avatar>
-        <Typography
-          variant="subtitle1"
-          sx={{
-            fontWeight: 700,
+            alignSelf: collapsed ? "center" : "flex-end",
             color: "#ecf0f1",
-            fontSize: "1.1rem",
-            letterSpacing: "0.5px",
+            mb: 2,
           }}
         >
-          {adminName}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: "#f1c40f",
-            fontWeight: 600,
-            fontSize: "0.9rem",
-            letterSpacing: "1px",
-            textTransform: "uppercase",
-            mt: 0.5,
-          }}
-        >
-          Admin Panel
-        </Typography>
-      </Box>
+          <MenuIcon />
+        </RotatingIconButton>
 
-      <Divider sx={{ borderColor: "rgba(255,255,255,0.15)" }} />
+        {!collapsed && (
+          <>
+            <Avatar
+              src={photoURL || undefined}
+              sx={{
+                width: 70,
+                height: 70,
+                mb: 1.5,
+                bgcolor: "#3498db",
+                fontWeight: "bold",
+                boxShadow: "0px 4px 12px rgba(0,0,0,0.4)",
+              }}
+            >
+              {!photoURL && (adminName ? adminName[0].toUpperCase() : "A")}
+            </Avatar>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 700,
+                color: "#ecf0f1",
+                fontSize: "1.1rem",
+              }}
+            >
+              {adminName}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#f1c40f",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+                textTransform: "uppercase",
+                mt: 0.5,
+              }}
+            >
+              Admin Panel
+            </Typography>
+          </>
+        )}
+      </Box>
 
       {/* Navigation */}
       <List
         sx={{
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
+          alignItems: collapsed ? "center" : "flex-start",
           mt: 1,
         }}
       >
         {navItems.map(({ text, icon, path }) => (
-          <ListItem
-            button
+          <Tooltip
             key={text}
-            onClick={() => navigate(path)}
-            sx={{
-              bgcolor:
-                location.pathname === path
-                  ? "rgba(255, 255, 255, 0.12)"
-                  : "transparent",
-              color: "#ecf0f1",
-              borderRadius: "10px",
-              width: "90%",
-              mb: 0.8,
-              transition: "all 0.3s ease",
-              "&:hover": {
-                bgcolor: "rgba(255, 255, 255, 0.2)",
-                transform: "scale(1.03)",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-              },
-            }}
+            title={collapsed ? text : ""}
+            placement="right"
           >
-            <ListItemIcon
+            <ListItem
+              button
+              onClick={() => navigate(path)}
               sx={{
-                color:
-                  location.pathname === path ? "#f1c40f" : "rgba(255,255,255,0.7)",
-                minWidth: 40,
-                transition: "color 0.3s ease",
+                bgcolor:
+                  location.pathname === path
+                    ? "rgba(255, 255, 255, 0.12)"
+                    : "transparent",
+                color: "#ecf0f1",
+                borderRadius: "10px",
+                width: collapsed ? "60%" : "90%",
+                mb: 0.8,
+                transition: "all 0.3s ease",
+                justifyContent: collapsed ? "center" : "flex-start",
+                "&:hover": {
+                  bgcolor: "rgba(255, 255, 255, 0.2)",
+                  transform: "scale(1.03)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+                },
               }}
             >
-              {icon}
-            </ListItemIcon>
-            <ListItemText
-              primary={text}
-              primaryTypographyProps={{
-                fontWeight: location.pathname === path ? 600 : 400,
-                fontSize: "0.95rem",
-              }}
-            />
-          </ListItem>
+              <ListItemIcon
+                sx={{
+                  color:
+                    location.pathname === path
+                      ? "#f1c40f"
+                      : "rgba(255,255,255,0.7)",
+                  minWidth: 0,
+                  mr: collapsed ? 0 : 2,
+                  transition: "margin 0.3s ease",
+                }}
+              >
+                {icon}
+              </ListItemIcon>
+              {!collapsed && (
+                <ListItemText
+                  primary={text}
+                  primaryTypographyProps={{
+                    fontWeight: location.pathname === path ? 600 : 400,
+                    fontSize: "0.95rem",
+                  }}
+                />
+              )}
+            </ListItem>
+          </Tooltip>
         ))}
       </List>
     </Drawer>
