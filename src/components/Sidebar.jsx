@@ -8,10 +8,11 @@ import {
   Box,
   Typography,
   Avatar,
-  Divider,
   Badge,
   IconButton,
   Tooltip,
+  Fade,
+  Collapse,
 } from "@mui/material";
 import { styled } from "@mui/system";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -40,7 +41,14 @@ const Sidebar = () => {
   const [adminName, setAdminName] = useState("");
   const [photoURL, setPhotoURL] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
-  const [collapsed, setCollapsed] = useState(false); // 🔑 collapse state
+  const [collapsed, setCollapsed] = useState(
+    () => JSON.parse(localStorage.getItem("sidebarCollapsed")) || false
+  );
+
+  // ✅ Sync collapsed state with localStorage
+  useEffect(() => {
+    localStorage.setItem("sidebarCollapsed", JSON.stringify(collapsed));
+  }, [collapsed]);
 
   // ✅ Real-time admin profile listener
   useEffect(() => {
@@ -121,10 +129,10 @@ const Sidebar = () => {
       sx={{
         width: collapsed ? 80 : 250,
         flexShrink: 0,
-        transition: "width 0.4s ease", // 🔑 smooth animation
+        transition: "width 0.4s ease",
         [`& .MuiDrawer-paper`]: {
           width: collapsed ? 80 : 250,
-          transition: "width 0.4s ease", // 🔑 smooth animation
+          transition: "width 0.4s ease",
           boxSizing: "border-box",
           background:
             "linear-gradient(160deg, rgba(44,62,80,0.95), rgba(52,73,94,0.92), rgba(44,62,80,0.95))",
@@ -147,6 +155,7 @@ const Sidebar = () => {
           px: 2,
           background: "rgba(255, 255, 255, 0.05)",
           borderBottom: "1px solid rgba(255,255,255,0.1)",
+          transition: "all 0.4s ease",
         }}
       >
         <RotatingIconButton
@@ -161,8 +170,15 @@ const Sidebar = () => {
           <MenuIcon />
         </RotatingIconButton>
 
-        {!collapsed && (
-          <>
+        {/* Smooth collapse/expand with animation */}
+        <Collapse in={!collapsed} timeout={400}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
             <Avatar
               src={photoURL || undefined}
               sx={{
@@ -172,34 +188,39 @@ const Sidebar = () => {
                 bgcolor: "#3498db",
                 fontWeight: "bold",
                 boxShadow: "0px 4px 12px rgba(0,0,0,0.4)",
+                transition: "all 0.3s ease",
               }}
             >
               {!photoURL && (adminName ? adminName[0].toUpperCase() : "A")}
             </Avatar>
-            <Typography
-              variant="subtitle1"
-              sx={{
-                fontWeight: 700,
-                color: "#ecf0f1",
-                fontSize: "1.1rem",
-              }}
-            >
-              {adminName}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "#f1c40f",
-                fontWeight: 600,
-                fontSize: "0.9rem",
-                textTransform: "uppercase",
-                mt: 0.5,
-              }}
-            >
-              Admin Panel
-            </Typography>
-          </>
-        )}
+            <Fade in={!collapsed} timeout={500}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 700,
+                  color: "#ecf0f1",
+                  fontSize: "1.1rem",
+                }}
+              >
+                {adminName}
+              </Typography>
+            </Fade>
+            <Fade in={!collapsed} timeout={600}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#f1c40f",
+                  fontWeight: 600,
+                  fontSize: "0.9rem",
+                  textTransform: "uppercase",
+                  mt: 0.5,
+                }}
+              >
+                Admin Panel
+              </Typography>
+            </Fade>
+          </Box>
+        </Collapse>
       </Box>
 
       {/* Navigation */}
@@ -209,9 +230,10 @@ const Sidebar = () => {
           flexDirection: "column",
           alignItems: collapsed ? "center" : "flex-start",
           mt: 1,
+          transition: "all 0.4s ease",
         }}
       >
-        {navItems.map(({ text, icon, path }) => (
+        {navItems.map(({ text, icon, path }, index) => (
           <Tooltip
             key={text}
             title={collapsed ? text : ""}
@@ -229,11 +251,11 @@ const Sidebar = () => {
                 borderRadius: "10px",
                 width: collapsed ? "60%" : "90%",
                 mb: 0.8,
-                transition: "all 0.3s ease",
+                transition: "all 0.4s ease",
                 justifyContent: collapsed ? "center" : "flex-start",
                 "&:hover": {
                   bgcolor: "rgba(255, 255, 255, 0.2)",
-                  transform: "scale(1.03)",
+                  transform: "scale(1.05)",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
                 },
               }}
@@ -246,20 +268,23 @@ const Sidebar = () => {
                       : "rgba(255,255,255,0.7)",
                   minWidth: 0,
                   mr: collapsed ? 0 : 2,
-                  transition: "margin 0.3s ease",
+                  transition: "all 0.4s ease",
                 }}
               >
                 {icon}
               </ListItemIcon>
-              {!collapsed && (
+
+              {/* Slide & fade text */}
+              <Collapse in={!collapsed} timeout={400} orientation="horizontal">
                 <ListItemText
                   primary={text}
                   primaryTypographyProps={{
                     fontWeight: location.pathname === path ? 600 : 400,
                     fontSize: "0.95rem",
                   }}
+                  sx={{ transition: "all 0.4s ease" }}
                 />
-              )}
+              </Collapse>
             </ListItem>
           </Tooltip>
         ))}
