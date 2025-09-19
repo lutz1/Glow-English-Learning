@@ -8,11 +8,16 @@ import {
   Menu,
   MenuItem,
   Divider,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { db } from "../firebase";
 import { doc, onSnapshot } from "firebase/firestore";
+
+const EXPANDED_WIDTH = 260; // sidebar expanded width
+const COLLAPSED_WIDTH = 80; // sidebar collapsed width
 
 const TeacherTopbar = () => {
   const { currentUser, logout } = useAuth();
@@ -21,13 +26,35 @@ const TeacherTopbar = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [teacherName, setTeacherName] = useState("");
   const [photoURL, setPhotoURL] = useState("");
+  const [collapsed, setCollapsed] = useState(
+    () => JSON.parse(localStorage.getItem("teacherSidebarCollapsed")) || false
+  );
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const open = Boolean(anchorEl);
 
+  // 🔄 Sync topbar with sidebar collapse state in real time
+  useEffect(() => {
+    const handleSidebarToggle = (e) => {
+      if (e.detail !== undefined) {
+        setCollapsed(e.detail);
+      } else {
+        setCollapsed(
+          JSON.parse(localStorage.getItem("teacherSidebarCollapsed")) || false
+        );
+      }
+    };
+
+    window.addEventListener("sidebarToggle", handleSidebarToggle);
+    return () => window.removeEventListener("sidebarToggle", handleSidebarToggle);
+  }, []);
+
+  // 🔄 Live teacher profile
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    // ✅ Real-time listener on the user document
     const unsubscribe = onSnapshot(
       doc(db, "users", currentUser.uid),
       (docSnap) => {
@@ -35,8 +62,6 @@ const TeacherTopbar = () => {
           const data = docSnap.data();
           setTeacherName(data.name || data.email || "");
           setPhotoURL(data.photoURL || "");
-        } else {
-          console.warn("⚠️ No user profile found in /users");
         }
       },
       (error) => {
@@ -64,15 +89,21 @@ const TeacherTopbar = () => {
     handleMenuClose();
   };
 
+  // 👇 Sidebar width based on collapsed state
+  const sidebarWidth = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+
   return (
     <AppBar
-      position="sticky"
+      position="fixed"
       elevation={0}
       sx={{
+        width: isMobile ? "100%" : `calc(100% - ${sidebarWidth}px)`,
+        ml: isMobile ? 0 : `${sidebarWidth}px`,
         background:
           "linear-gradient(135deg, rgba(162,155,254,0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
         backdropFilter: "blur(12px)",
         boxShadow: "0px 2px 10px rgba(0,0,0,0.15)",
+        transition: "all 0.3s ease", // smooth transition
       }}
     >
       <Toolbar>
