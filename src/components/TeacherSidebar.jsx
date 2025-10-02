@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"; 
+import React, { useEffect, useState } from "react";
 import {
   Box,
   List,
@@ -91,11 +91,7 @@ const TeacherSidebar = () => {
   // ✅ Save collapse state in localStorage & notify Topbar
   useEffect(() => {
     localStorage.setItem("teacherSidebarCollapsed", JSON.stringify(collapsed));
-
-    // 🔔 Dispatch event so TeacherTopbar can listen
-    window.dispatchEvent(
-      new CustomEvent("sidebarToggle", { detail: collapsed })
-    );
+    window.dispatchEvent(new CustomEvent("sidebarToggle", { detail: collapsed }));
   }, [collapsed]);
 
   // ✅ Fetch teacher info
@@ -135,16 +131,17 @@ const TeacherSidebar = () => {
         display: "flex",
         flexDirection: "column",
         overflowX: "hidden",
-        zIndex: 1000,
+        zIndex: 1200,
         boxShadow: 3,
       }}
     >
-      {/* Hamburger Toggle */}
+      {/* ✅ Always visible hamburger toggle */}
       <Box
         sx={{
-          display: "flex",
-          justifyContent: collapsed ? "center" : "flex-end",
-          p: 1,
+          position: "absolute",
+          top: 10,
+          right: collapsed ? "calc(50% - 20px)" : 10,
+          zIndex: 1300,
         }}
       >
         <RotatingIconButton
@@ -160,6 +157,7 @@ const TeacherSidebar = () => {
       {!collapsed && (
         <Box
           sx={{
+            mt: 6, // push below hamburger
             textAlign: "center",
             mb: 2,
             display: "flex",
@@ -196,7 +194,7 @@ const TeacherSidebar = () => {
         </Box>
       )}
 
-      <Divider sx={{ bgcolor: "rgba(255,255,255,0.4)", mb: 2 }} />
+      <Divider sx={{ bgcolor: "rgba(255,255,255,0.4)", mb: 2, mt: collapsed ? 6 : 2 }} />
 
       {/* Clock */}
       {!collapsed && (
@@ -235,7 +233,7 @@ const TeacherSidebar = () => {
       )}
 
       {/* Menu Items */}
-      <List sx={{ flexGrow: 1 }}>
+      <List sx={{ flexGrow: 1, mt: collapsed ? 8 : 0 }}>
         {[
           { text: "Dashboard", icon: <DashboardIcon />, path: "/teacher/dashboard" },
           { text: "Start Session", icon: <PlayCircleIcon />, path: "/teacher/start-session" },
