@@ -624,28 +624,25 @@ const Dashboard = () => {
           <Grid item xs={12}>
             <Card sx={glassCard}>
               <CardContent>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, flexWrap: "wrap" }}>
                   <Typography variant="h6" sx={{ fontWeight: "bold", color: "#64b5f6" }}>
                     📅 Latest Sessions
                   </Typography>
-
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
                     <LocalizationProvider dateAdapter={AdapterDateFns}>
                       <DatePicker
                         label="Start Date"
                         value={latestRange.start}
                         onChange={handleLatestStartChange}
-                        slotProps={{ textField: { size: "small", sx: { bgcolor: "#fff", borderRadius: 1 } } }}
+                        slotProps={{ textField: { size: "small", sx: { bgcolor: "#fff", borderRadius: 1, minWidth: 110 } } }}
                       />
                       <DatePicker
                         label="End Date"
                         value={latestRange.end}
                         onChange={handleLatestEndChange}
-                        slotProps={{ textField: { size: "small", sx: { bgcolor: "#fff", borderRadius: 1 } } }}
+                        slotProps={{ textField: { size: "small", sx: { bgcolor: "#fff", borderRadius: 1, minWidth: 110 } } }}
                       />
                     </LocalizationProvider>
-
-                    {/* Reset button */}
                     <Button
                       size="small"
                       variant="outlined"
@@ -656,34 +653,70 @@ const Dashboard = () => {
                     >
                       Reset
                     </Button>
-
                     <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
                       Showing: {latestLabel}
                     </Typography>
                   </Box>
                 </Box>
 
-                {/* Header Row */}
-                <Box sx={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr", p: 1.5, borderRadius: "10px", mb: 1, fontWeight: "bold", bgcolor: "rgba(255,255,255,0.06)", textAlign: "center" }}>
+                {/* Responsive Header Row */}
+                <Box
+                  sx={{
+                    display: { xs: "none", sm: "grid" },
+                    gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr",
+                    p: 1.5,
+                    borderRadius: "10px",
+                    mb: 1,
+                    fontWeight: "bold",
+                    bgcolor: "rgba(255,255,255,0.06)",
+                    textAlign: "center",
+                  }}
+                >
                   <Typography>👩‍🏫 Teacher</Typography>
-
                   <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
                     <TableSortLabel active direction={statusSortAsc ? "asc" : "desc"} onClick={() => setStatusSortAsc((s) => !s)}>
                       📌 Status
                     </TableSortLabel>
                   </Box>
-
                   <Typography>⏰ Time</Typography>
                   <Typography>💰 Earnings</Typography>
                   <Typography>🖼 Screenshot</Typography>
                 </Box>
 
-                {/* Session List */}
+                {/* Mobile Header Row */}
+                <Box
+                  sx={{
+                    display: { xs: "flex", sm: "none" },
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    p: 1,
+                    borderRadius: "10px",
+                    mb: 1,
+                    fontWeight: "bold",
+                    bgcolor: "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <Typography sx={{ fontSize: "0.95rem" }}>Session</Typography>
+                  <TableSortLabel
+                    active
+                    direction={statusSortAsc ? "asc" : "desc"}
+                    onClick={() => setStatusSortAsc((s) => !s)}
+                    sx={{ fontSize: "0.95rem" }}
+                  >
+                    Status
+                  </TableSortLabel>
+                  <Typography sx={{ fontSize: "0.95rem" }}>Earnings</Typography>
+                </Box>
+
+                {/* Responsive Session List */}
                 <List sx={{ maxHeight: 400, overflow: "auto" }}>
                   {filteredSessions.length === 0 && (
                     <Box sx={{ p: 2 }}>
                       <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
-                        {latestRange.start && latestRange.end ? `No sessions found for ${latestLabel}` : `No sessions for today (${new Date().toLocaleDateString()}).`}
+                        {latestRange.start && latestRange.end
+                          ? `No sessions found for ${latestLabel}`
+                          : `No sessions for today (${new Date().toLocaleDateString()}).`}
                       </Typography>
                     </Box>
                   )}
@@ -694,32 +727,150 @@ const Dashboard = () => {
                     const endTime = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
 
                     return (
-                      <ListItem key={s.id} sx={{ display: "grid", gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr", alignItems: "center", p: 1.5, mb: 1, borderRadius: "12px", bgcolor: "rgba(255,255,255,0.03)", "&:hover": { bgcolor: "rgba(255,255,255,0.06)" }, textAlign: "center" }}>
+                      <ListItem
+                        key={s.id}
+                        sx={{
+                          display: { xs: "flex", sm: "grid" },
+                          flexDirection: { xs: "column", sm: "unset" },
+                          gridTemplateColumns: { sm: "2fr 1fr 2fr 1fr 1fr" },
+                          alignItems: "center",
+                          p: 1.5,
+                          mb: 1,
+                          borderRadius: "12px",
+                          bgcolor: "rgba(255,255,255,0.03)",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                          textAlign: "center",
+                          width: "100%",
+                        }}
+                      >
                         {/* Teacher */}
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, justifySelf: "start" }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1.5,
+                            justifySelf: "start",
+                            width: { xs: "100%", sm: "auto" },
+                            mb: { xs: 1, sm: 0 },
+                          }}
+                        >
                           <Avatar src={teacher.photoURL || ""} alt={teacher.name || s.teacherName || s.teacherId} />
                           <Box sx={{ textAlign: "left" }}>
-                            <Typography sx={{ fontWeight: "bold" }}>{teacher.name || s.teacherName || s.teacherId}</Typography>
-                            <Chip label={s.classType || "N/A"} size="small" sx={{ mt: 0.5, fontWeight: "bold", ...(classTypeColors[s.classType] || classTypeColors.Default) }} />
+                            <Typography sx={{ fontWeight: "bold", fontSize: { xs: "1rem", sm: "inherit" } }}>
+                              {teacher.name || s.teacherName || s.teacherId}
+                            </Typography>
+                            <Chip
+                              label={s.classType || "N/A"}
+                              size="small"
+                              sx={{
+                                mt: 0.5,
+                                fontWeight: "bold",
+                                ...(classTypeColors[s.classType] || classTypeColors.Default),
+                                fontSize: { xs: "0.75rem", sm: "inherit" },
+                              }}
+                            />
                           </Box>
                         </Box>
 
                         {/* Status */}
-                        <Chip label={s.status} size="small" color={statusColors[s.status] || "default"} />
+                        <Chip
+                          label={s.status}
+                          size="small"
+                          color={statusColors[s.status] || "default"}
+                          sx={{ mb: { xs: 1, sm: 0 }, fontSize: { xs: "0.75rem", sm: "inherit" } }}
+                        />
 
                         {/* Time */}
-                        <Box>
-                          <Typography sx={{ fontSize: "0.75rem" }}>{startTime ? startTime.toLocaleString() : "-"}</Typography>
-                          <Typography sx={{ fontSize: "0.75rem" }}>{endTime ? endTime.toLocaleString() : "-"}</Typography>
+                        <Box sx={{ display: { xs: "none", sm: "block" } }}>
+                          <Typography sx={{ fontSize: "0.75rem" }}>
+                            {startTime ? startTime.toLocaleString() : "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: "0.75rem" }}>
+                            {endTime ? endTime.toLocaleString() : "-"}
+                          </Typography>
+                        </Box>
+                        {/* Mobile Time */}
+                        <Box sx={{ display: { xs: "flex", sm: "none" }, flexDirection: "row", gap: 1, width: "100%", justifyContent: "space-between", mb: 1 }}>
+                          <Typography sx={{ fontSize: "0.75rem" }}>
+                            {startTime ? startTime.toLocaleTimeString() : "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: "0.75rem" }}>
+                            {endTime ? endTime.toLocaleTimeString() : "-"}
+                          </Typography>
                         </Box>
 
                         {/* Earnings */}
-                        <Typography sx={{ fontWeight: "bold", color: "#81c784" }}>₱{(s.totalEarnings || 0).toFixed(2)}</Typography>
+                        <Typography
+                          sx={{
+                            fontWeight: "bold",
+                            color: "#81c784",
+                            fontSize: { xs: "1rem", sm: "inherit" },
+                            mb: { xs: 1, sm: 0 },
+                            width: { xs: "100%", sm: "auto" },
+                            textAlign: { xs: "left", sm: "center" },
+                          }}
+                        >
+                          ₱{(s.totalEarnings || 0).toFixed(2)}
+                        </Typography>
 
                         {/* Screenshot */}
-                        <Box>
+                        <Box
+                          sx={{
+                            display: { xs: "none", sm: "block" },
+                            width: "100%",
+                            textAlign: "center",
+                          }}
+                        >
                           {s.screenshotUrl ? (
-                            <img src={s.screenshotUrl} alt="Session Screenshot" style={{ width: 60, height: 40, objectFit: "cover", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", transition: "transform 0.2s ease" }} onClick={() => { setSelectedScreenshot(s.screenshotUrl); setOpenScreenshot(true); }} />
+                            <img
+                              src={s.screenshotUrl}
+                              alt="Session Screenshot"
+                              style={{
+                                width: 60,
+                                height: 40,
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                                border: "1px solid rgba(255,255,255,0.15)",
+                                cursor: "pointer",
+                                transition: "transform 0.2s ease",
+                              }}
+                              onClick={() => {
+                                setSelectedScreenshot(s.screenshotUrl);
+                                setOpenScreenshot(true);
+                              }}
+                            />
+                          ) : (
+                            <Typography sx={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>N/A</Typography>
+                          )}
+                        </Box>
+                        {/* Mobile Screenshot */}
+                        <Box
+                          sx={{
+                            display: { xs: "flex", sm: "none" },
+                            width: "100%",
+                            justifyContent: "flex-start",
+                            alignItems: "center",
+                            mt: 1,
+                          }}
+                        >
+                          {s.screenshotUrl ? (
+                            <img
+                              src={s.screenshotUrl}
+                              alt="Session Screenshot"
+                              style={{
+                                width: 48,
+                                height: 32,
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                                border: "1px solid rgba(255,255,255,0.15)",
+                                cursor: "pointer",
+                                transition: "transform 0.2s ease",
+                              }}
+                              onClick={() => {
+                                setSelectedScreenshot(s.screenshotUrl);
+                                setOpenScreenshot(true);
+                              }}
+                            />
                           ) : (
                             <Typography sx={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>N/A</Typography>
                           )}

@@ -1,4 +1,4 @@
- // src/pages/admin/Payroll.jsx
+// src/pages/admin/Payroll.jsx
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -1151,32 +1151,35 @@ const Payroll = () => {
               <Typography>No payroll history found.</Typography>
             )}
             {payrollHistory.map((h) => (
-              <Card key={h.id} sx={{ mb: 2, p: 2, borderRadius: "12px" }}>
-                <Typography fontWeight="bold">{h.teacherName}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {h.email}
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                  Period: {h.periodFrom} → {h.periodTo}
-                </Typography>
-                <Typography fontWeight="bold" color="success.main">
-                  ₱{(h.totalAmount || 0).toFixed(2)}
-                </Typography>
-
-                <Typography variant="caption" color="text.secondary">
-                  Generated on: {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString() : ""}
-                </Typography>
-
-                <List sx={{ mt: 1 }}>
-                  {h.sessions.map((s) => (
-                    <ListItem key={s.id} sx={{ py: 0.5 }}>
-                      <Typography variant="body2">
-                        {s.classType} | {s.actualDuration} mins | ₱{s.totalEarnings}
-                      </Typography>
-                    </ListItem>
-                  ))}
-                </List>
-              </Card>
+              <Card key={h.id} sx={{ mb: 2, p: 2, borderRadius: "12px", position: "relative" }}>
+    <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      <Box>
+        <Typography fontWeight="bold">{h.teacherName}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {h.email}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          Period: {h.periodFrom} → {h.periodTo}
+        </Typography>
+        <Typography fontWeight="bold" color="success.main">
+          ₱{(h.totalAmount || 0).toFixed(2)}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Generated on: {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString() : ""}
+        </Typography>
+      </Box>
+      <Tooltip title="Delete">
+        <IconButton
+          color="error"
+          size="small"
+          sx={{ ml: 2, alignSelf: "flex-start" }}
+          onClick={() => handleDeleteHistory(h.id)}
+        >
+          <DeleteIcon />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  </Card>
             ))}
           </List>
           </DialogContent>
