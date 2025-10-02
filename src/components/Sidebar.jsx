@@ -141,7 +141,9 @@ const Sidebar = () => {
           color: "#ecf0f1",
           borderRight: "1px solid rgba(255,255,255,0.1)",
           height: "100vh",
-          overflowX: "hidden",
+          overflow: "hidden", // Prevent overflow from scaling
+          display: "flex",
+          flexDirection: "column",
         },
       }}
     >
@@ -156,6 +158,7 @@ const Sidebar = () => {
           background: "rgba(255, 255, 255, 0.05)",
           borderBottom: "1px solid rgba(255,255,255,0.1)",
           transition: "all 0.4s ease",
+          flexShrink: 0,
         }}
       >
         <RotatingIconButton
@@ -228,9 +231,13 @@ const Sidebar = () => {
         sx={{
           display: "flex",
           flexDirection: "column",
-          alignItems: collapsed ? "center" : "flex-start",
+          alignItems: "center", // Always center
           mt: 1,
           transition: "all 0.4s ease",
+          flex: 1,
+          overflowY: "auto",
+          width: "100%",
+          pr: 1,
         }}
       >
         {navItems.map(({ text, icon, path }, index) => (
@@ -243,20 +250,27 @@ const Sidebar = () => {
               button
               onClick={() => navigate(path)}
               sx={{
-                bgcolor:
-                  location.pathname === path
-                    ? "rgba(255, 255, 255, 0.12)"
-                    : "transparent",
                 color: "#ecf0f1",
                 borderRadius: "10px",
-                width: collapsed ? "60%" : "90%",
+                width: collapsed ? "60%" : "calc(100% - 16px)",
                 mb: 0.8,
                 transition: "all 0.4s ease",
                 justifyContent: collapsed ? "center" : "flex-start",
+                alignItems: "center",
+                display: "flex",
+                overflow: "hidden",
+                boxSizing: "border-box",
+                alignSelf: "center",
+                pl: collapsed ? 0 : 2,
                 "&:hover": {
-                  bgcolor: "rgba(255, 255, 255, 0.2)",
-                  transform: "scale(1.05)",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+                  ...(collapsed
+                    ? {} // No hover effect when collapsed
+                    : {
+                        bgcolor: "rgba(255, 255, 255, 0.2)",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                        zIndex: 1,
+                      }
+                  ),
                 },
               }}
             >
@@ -268,13 +282,23 @@ const Sidebar = () => {
                       : "rgba(255,255,255,0.7)",
                   minWidth: 0,
                   mr: collapsed ? 0 : 2,
-                  transition: "all 0.4s ease",
+                  transition: "all 0.4s ease, transform 0.3s",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  width: collapsed ? "100%" : "auto",
+                  height: collapsed ? 40 : "auto",
+                  fontSize: collapsed ? "2rem" : "inherit",
+                  ...(collapsed && {
+                    "&:hover": {
+                      color: "#f1c40f",
+                      transform: "rotate(-15deg) scale(1.1)", // icon animation on hover
+                    },
+                  }),
                 }}
               >
                 {icon}
               </ListItemIcon>
-
-              {/* Slide & fade text */}
               <Collapse in={!collapsed} timeout={400} orientation="horizontal">
                 <ListItemText
                   primary={text}
