@@ -471,7 +471,7 @@ const Dashboard = () => {
 
   return (
     <AdminLayout>
-      <Box sx={{ p: 3, minHeight: "100vh", background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)", color: "#fff" }}>
+      <Box sx={{ p: 3, minHeight: "100vh",overflowX: "hidden",background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)", color: "#fff" }}>
         {/* HEADER */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Typography variant="h4" fontWeight="bold">
@@ -483,7 +483,7 @@ const Dashboard = () => {
         </Box>
 
         <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.2)" }} />
-
+        <Box sx={{ width: "100%", overflowX: "hidden" }}>
         <Grid container spacing={3}>
           {/* CARDS */}
           <Grid item xs={12} sm={6} md={4}>
@@ -554,7 +554,7 @@ const Dashboard = () => {
                         </Typography>
                       </Box>
                     ) : (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="99%" height="100%">
                         <LineChart data={earningData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                           <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                           <XAxis dataKey="label" tick={{ fill: "#fff", fontSize: 12 }} interval={0} angle={-30} textAnchor="end" height={60} />
@@ -883,6 +883,7 @@ const Dashboard = () => {
             </Card>
           </Grid>
         </Grid>
+        </Box>
       </Box>
 
       {/* Screenshot Lightbox */}
