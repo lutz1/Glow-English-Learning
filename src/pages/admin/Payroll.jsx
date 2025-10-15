@@ -588,6 +588,61 @@ const Payroll = () => {
     }
   };
 
+  // NEW: Delete a payroll history entry (with confirmation, storage cleanup, refresh)
+  const handleDeleteHistory = async (historyId) => {
+    if (!historyId) return;
+    const ok = window.confirm("Are you sure you want to delete this payroll history record? This action cannot be undone.");
+    if (!ok) return;
+
+    try {
+      // find the record in state to inspect receipt field (if any)
+      const record = payrollHistory.find((r) => r.id === historyId);
+
+      // If record has a receipt field (you saved `receipt` in generateTeacherPDF),
+      // attempt to delete from storage only if it looks like a storage URL or gs:// path.
+      // If it's a base64/data URL (startsWith 'data:'), nothing to delete from storage.
+      const receiptField = record?.receipt || record?.receiptUrl || record?.receiptPath || null;
+
+      if (receiptField && typeof receiptField === "string") {
+        const looksLikeDownloadUrl =
+          receiptField.startsWith("https://firebasestorage.googleapis.com") ||
+          receiptField.startsWith("https://storage.googleapis.com") ||
+          receiptField.startsWith("gs://") ||
+          receiptField.includes("/o/");
+
+        if (looksLikeDownloadUrl) {
+          try {
+            const objRef = getStorageRefFromDownloadUrl(receiptField);
+            if (objRef) {
+              await deleteObject(objRef);
+            } else {
+              // fallback: attempt to treat receiptField as a storage path
+              try {
+                await deleteObject(storageRef(storage, receiptField));
+              } catch (err) {
+                console.warn("Fallback storage delete failed for receipt:", err);
+              }
+            }
+          } catch (err) {
+            console.warn("Could not delete payroll receipt from storage:", err);
+          }
+        } else {
+          // If receiptField is data URL (base64) or other non-storage string, skip storage deletion.
+          // Nothing to do.
+        }
+      }
+
+      // delete document
+      await deleteDoc(doc(db, "payrollHistory", historyId));
+
+      // Refresh
+      await fetchPayrollHistory();
+    } catch (err) {
+      console.error("Error deleting payroll history:", err);
+      alert("Failed to delete payroll history. See console for details.");
+    }
+  };
+
   // Summary data & totals
   const summaryData = getTeacherSummary();
   const totalPayrollPaid = Object.values(summaryData).reduce(
@@ -1152,34 +1207,34 @@ const Payroll = () => {
             )}
             {payrollHistory.map((h) => (
               <Card key={h.id} sx={{ mb: 2, p: 2, borderRadius: "12px", position: "relative" }}>
-    <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-      <Box>
-        <Typography fontWeight="bold">{h.teacherName}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {h.email}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          Period: {h.periodFrom} → {h.periodTo}
-        </Typography>
-        <Typography fontWeight="bold" color="success.main">
-          ₱{(h.totalAmount || 0).toFixed(2)}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Generated on: {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString() : ""}
-        </Typography>
-      </Box>
-      <Tooltip title="Delete">
-        <IconButton
-          color="error"
-          size="small"
-          sx={{ ml: 2, alignSelf: "flex-start" }}
-          onClick={() => handleDeleteHistory(h.id)}
-        >
-          <DeleteIcon />
-        </IconButton>
-      </Tooltip>
-    </Box>
-  </Card>
+            <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <Box>
+                <Typography fontWeight="bold">{h.teacherName}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {h.email}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Period: {h.periodFrom} → {h.periodTo}
+                </Typography>
+                <Typography fontWeight="bold" color="success.main">
+                  ₱{(h.totalAmount || 0).toFixed(2)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Generated on: {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString() : ""}
+                </Typography>
+              </Box>
+              <Tooltip title="Delete">
+                <IconButton
+                  color="error"
+                  size="small"
+                  sx={{ ml: 2, alignSelf: "flex-start" }}
+                  onClick={() => handleDeleteHistory(h.id)}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Card>
             ))}
           </List>
           </DialogContent>
