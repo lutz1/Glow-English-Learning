@@ -129,12 +129,12 @@ const Topbar = () => {
     };
   }, []);
 
-  // 🔹 Fetch total ₱0.20 per session
+  // 🔹 Fetch total ₱0.50 per session
   const fetchWalletData = async () => {
     try {
       setLoadingQR(true);
       const sessionSnap = await getDocs(collection(db, "sessions"));
-      const total = sessionSnap.size * 0.2;
+      const total = sessionSnap.size * 0.5;
       setTotalTax(total);
     } catch (err) {
       console.error("Error fetching wallet data:", err);
