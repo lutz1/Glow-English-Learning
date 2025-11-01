@@ -1,3 +1,4 @@
+// src/pages/teacher/StartSession.jsx
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -27,7 +28,9 @@ import {
   Translate,
   Close,
 } from "@mui/icons-material";
-import TeacherLayout from "../../layout/TeacherLayout";
+
+import TeacherSidebar from "../../components/TeacherSidebar";
+import TeacherTopbar from "../../components/TeacherTopbar";
 import { db, storage } from "../../firebase";
 import {
   collection,
@@ -42,6 +45,8 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
+import { useMediaQuery } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
 // ✅ Class settings
 const CLASS_SETTINGS = {
@@ -82,20 +87,24 @@ const CLASS_SETTINGS = {
   },
 };
 
+const drawerWidth = 240;
+
 const StartSession = () => {
   const { currentUser } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
 
   const [running, setRunning] = useState(false);
   const [classType, setClassType] = useState("");
   const [targetSeconds, setTargetSeconds] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [sessionId, setSessionId] = useState(null);
-  const [status, setStatus] = useState(null); // ongoing | awaiting_screenshot | completed
+  const [status, setStatus] = useState(null);
   const [screenshotFile, setScreenshotFile] = useState(null);
-
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-
   const [openDialog, setOpenDialog] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [selectedHours, setSelectedHours] = useState(0);
@@ -105,7 +114,7 @@ const StartSession = () => {
   const startTsRef = useRef(null);
   const intervalRef = useRef(null);
 
-  // 🔄 Restore unfinished sessions
+  // Restore unfinished sessions
   useEffect(() => {
     if (!currentUser) return;
     const fetchSession = async () => {
@@ -118,7 +127,6 @@ const StartSession = () => {
       if (!snap.empty) {
         const docData = snap.docs[0];
         const data = docData.data();
-
         setSessionId(docData.id);
         setClassType(data.classType);
         setTargetSeconds(data.durationSeconds);
@@ -144,11 +152,10 @@ const StartSession = () => {
           intervalRef.current = null;
           setRunning(false);
           setStatus("awaiting_screenshot");
-
           if (sessionId) {
             updateDoc(doc(db, "sessions", sessionId), {
               status: "awaiting_screenshot",
-              endTime: serverTimestamp(), // ✅ record endTime
+              endTime: serverTimestamp(),
             });
           }
         }
@@ -164,10 +171,8 @@ const StartSession = () => {
   };
 
   const handleClassClick = async (key) => {
-    if (running || status === "ongoing" || status === "awaiting_screenshot")
-      return;
+    if (running || status === "ongoing" || status === "awaiting_screenshot") return;
 
-    // 🔍 Prevent duplicate session creation
     const q = query(
       collection(db, "sessions"),
       where("teacherId", "==", currentUser.uid),
@@ -190,11 +195,8 @@ const StartSession = () => {
     }
   };
 
-  // Start fixed-duration class
   const startFixedClass = async () => {
     if (!currentUser) return;
-
-    // 🔍 Prevent duplicate session creation
     const q = query(
       collection(db, "sessions"),
       where("teacherId", "==", currentUser.uid),
@@ -206,7 +208,6 @@ const StartSession = () => {
       setConfirmDialog(false);
       return;
     }
-
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = classConfig.duration;
     const totalEarnings = classConfig.rate;
@@ -227,14 +228,11 @@ const StartSession = () => {
       status: "ongoing",
     });
     setSessionId(docRef.id);
-    setConfirmDialog(false); // ✅ close confirm dialog
+    setConfirmDialog(false);
   };
 
-  // Start custom-duration class
   const confirmStart = async () => {
     if (!currentUser) return;
-
-    // 🔍 Prevent duplicate session creation
     const q = query(
       collection(db, "sessions"),
       where("teacherId", "==", currentUser.uid),
@@ -246,14 +244,12 @@ const StartSession = () => {
       setOpenDialog(false);
       return;
     }
-
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = selectedHours * 60 + selectedMinutes;
     if (totalMinutes < classConfig.duration) {
       alert(`⚠️ Minimum duration is ${classConfig.duration} minutes`);
       return;
     }
-
     const perMinuteRate = classConfig.rate / classConfig.duration;
     const totalEarnings = perMinuteRate * totalMinutes;
 
@@ -276,7 +272,6 @@ const StartSession = () => {
     setSessionId(docRef.id);
   };
 
-  // Stop class
   const handleStop = async () => {
     if (sessionId) {
       clearInterval(intervalRef.current);
@@ -288,11 +283,10 @@ const StartSession = () => {
         actualEarnings: CLASS_SETTINGS[classType].rate,
         endTime: serverTimestamp(),
       });
-      setConfirmDialog(false); // ✅ close dialog if used
+      setConfirmDialog(false);
     }
   };
 
-  // Cancel class
   const handleCancel = async () => {
     if (sessionId) {
       await deleteDoc(doc(db, "sessions", sessionId));
@@ -303,10 +297,9 @@ const StartSession = () => {
       setSessionId(null);
       setElapsedSeconds(0);
     }
-    setCancelDialog(false); // ✅ close cancel dialog
+    setCancelDialog(false);
   };
 
-  // Half pay (Vietnamese class special case)
   const handleHalfPay = async () => {
     if (sessionId && classType === "Vietnamese Class") {
       clearInterval(intervalRef.current);
@@ -323,14 +316,11 @@ const StartSession = () => {
     }
   };
 
-  // ✅ Upload screenshot with progress
   const handleUpload = async () => {
     if (!screenshotFile || !sessionId) return;
 
     try {
-      const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${
-        screenshotFile.name
-      }`;
+      const filePath = `screenshots/${currentUser.uid}/${Date.now()}_${screenshotFile.name}`;
       const storageRef = ref(storage, filePath);
 
       setUploading(true);
@@ -341,8 +331,7 @@ const StartSession = () => {
       uploadTask.on(
         "state_changed",
         (snapshot) => {
-          const progress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setUploadProgress(progress);
         },
         (error) => {
@@ -352,13 +341,11 @@ const StartSession = () => {
         },
         async () => {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-
           await updateDoc(doc(db, "sessions", sessionId), {
             status: "completed",
             screenshotUrl: downloadURL,
             screenshotName: screenshotFile.name,
           });
-
           setStatus("completed");
           setClassType("");
           setRunning(false);
@@ -366,7 +353,6 @@ const StartSession = () => {
           setElapsedSeconds(0);
           setScreenshotFile(null);
           setUploading(false);
-
           alert("✅ Screenshot uploaded successfully!");
         }
       );
@@ -378,292 +364,220 @@ const StartSession = () => {
   };
 
   return (
-    <TeacherLayout>
-      <Box sx={{ p: 3 }}>
-        <Paper
-          sx={{
-            p: 4,
-            borderRadius: 3,
-            backdropFilter: "blur(12px)",
-            background:
-              "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(245,245,245,0.7))",
-          }}
-        >
-          <Typography
-            variant="h4"
-            mb={4}
-            fontWeight="bold"
-            align="center"
-            sx={{ color: "#333" }}
-          >
-            🎓 Start a Teaching Session
-          </Typography>
+    <Box sx={{ display: "flex" }}>
+      <TeacherSidebar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: { md: `calc(100% - ${sidebarOpen ? drawerWidth : 60}px)` },
+          transition: "width 0.3s",
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, rgba(220, 218, 253, 0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
+        }}
+      >
+        <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
-          <Box
+        <Box sx={{ p: 3 }}>
+          {/* ===== Main Paper UI ===== */}
+          <Paper
             sx={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 3,
+              mt: 6,
+              p: 4,
+              borderRadius: 3,
+              backdropFilter: "blur(12px)",
+              background: "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(245,245,245,0.7))",
             }}
           >
-            {Object.keys(CLASS_SETTINGS).map((key) => {
-              const isActive =
-                classType === key &&
-                (status === "ongoing" || status === "awaiting_screenshot");
-              const classConfig = CLASS_SETTINGS[key];
+            <Typography variant="h4" mb={4} fontWeight="bold" align="center" sx={{ color: "#333" }}>
+              🎓 Start a Teaching Session
+            </Typography>
 
-              return (
-                <motion.div
-                  key={key}
-                  whileHover={!isActive ? { scale: 1.05 } : {}}
-                  whileTap={!isActive ? { scale: 0.95 } : {}}
-                  onClick={() => handleClassClick(key)}
-                >
-                  <Card
-                    sx={{
-                      minHeight: 200,
-                      color: "#fff",
-                      background: classConfig.gradient,
-                      borderRadius: 3,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      p: 2,
-                      opacity:
-                        !isActive &&
-                        (running || status === "awaiting_screenshot")
-                          ? 0.5
-                          : 1,
-                      pointerEvents:
-                        !isActive &&
-                        (running || status === "awaiting_screenshot")
-                          ? "none"
-                          : "auto",
-                    }}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 3,
+              }}
+            >
+              {Object.keys(CLASS_SETTINGS).map((key) => {
+                const isActive =
+                  classType === key && (status === "ongoing" || status === "awaiting_screenshot");
+                const classConfig = CLASS_SETTINGS[key];
+
+                return (
+                  <motion.div
+                    key={key}
+                    whileHover={!isActive ? { scale: 1.05 } : {}}
+                    whileTap={!isActive ? { scale: 0.95 } : {}}
+                    onClick={() => handleClassClick(key)}
                   >
-                    <CardContent sx={{ textAlign: "center", width: "100%" }}>
-                      {classConfig.icon}
-                      <Typography
-                        variant="h6"
-                        sx={{ mt: 1, fontWeight: 700 }}
-                      >
-                        {key}
-                      </Typography>
-
-                      {!isActive && (
-                        <Typography
-                          variant="body2"
-                          sx={{ mt: 0.5, opacity: 0.9 }}
-                        >
-                          ₱{classConfig.rate} ({classConfig.duration} mins)
+                    <Card
+                      sx={{
+                        minHeight: 200,
+                        color: "#fff",
+                        background: classConfig.gradient,
+                        borderRadius: 3,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        p: 2,
+                        opacity: !isActive && (running || status === "awaiting_screenshot") ? 0.5 : 1,
+                        pointerEvents: !isActive && (running || status === "awaiting_screenshot") ? "none" : "auto",
+                      }}
+                    >
+                      <CardContent sx={{ textAlign: "center", width: "100%" }}>
+                        {classConfig.icon}
+                        <Typography variant="h6" sx={{ mt: 1, fontWeight: 700 }}>
+                          {key}
                         </Typography>
-                      )}
 
-                      {isActive && status === "ongoing" && (
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="h5">
-                            ⏱ {formatMMSS(elapsedSeconds)}
+                        {!isActive && (
+                          <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.9 }}>
+                            ₱{classConfig.rate} ({classConfig.duration} mins)
                           </Typography>
+                        )}
 
-                          {/* 💰 Cash bag animation with fixed earning */}
-                          <motion.div
-                            animate={{
-                              y: [0, -10, 0],
-                              scale: [1, 1.2, 1],
-                            }}
-                            transition={{
-                              duration: 1,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }}
-                            style={{ marginTop: "12px" }}
-                          >
-                            <Typography
-                              variant="h5"
-                              sx={{
-                                fontWeight: "bold",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                              }}
-                            >
-                              💰 ₱{classConfig.rate}
-                            </Typography>
-                          </motion.div>
+                        {isActive && status === "ongoing" && (
+                          <Box sx={{ mt: 2 }}>
+                            <Typography variant="h5">⏱ {formatMMSS(elapsedSeconds)}</Typography>
 
-                          <Box
-                            sx={{
-                              mt: 2,
-                              display: "flex",
-                              gap: 1,
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Button
-                              variant="contained"
-                              color="success"
-                              onClick={handleStop}
-                            >
-                              Stop
-                            </Button>
-                            <Button
-                              variant="contained"
-                              color="error"
-                              onClick={() => setCancelDialog(true)}
-                            >
-                              Cancel
-                            </Button>
-                            {key === "Vietnamese Class" &&
-                              elapsedSeconds >= 900 && (
-                                <Button
-                                  variant="contained"
-                                  color="warning"
-                                  onClick={handleHalfPay}
-                                >
+                            <Box sx={{ marginTop: "12px" }}>
+                              <Typography
+                                variant="h5"
+                                sx={{
+                                  fontWeight: "bold",
+                                  display: "flex",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  gap: 1,
+                                }}
+                              >
+                                💰 ₱{classConfig.rate}
+                              </Typography>
+                            </Box>
+
+                            <Box sx={{ mt: 2, display: "flex", gap: 1, justifyContent: "center" }}>
+                              <Button variant="contained" color="success" onClick={handleStop}>
+                                Stop
+                              </Button>
+                              <Button variant="contained" color="error" onClick={() => setCancelDialog(true)}>
+                                Cancel
+                              </Button>
+                              {key === "Vietnamese Class" && elapsedSeconds >= 900 && (
+                                <Button variant="contained" color="warning" onClick={handleHalfPay}>
                                   Half Pay
                                 </Button>
                               )}
-                          </Box>
-                        </Box>
-                      )}
-
-                      {isActive && status === "awaiting_screenshot" && (
-                        <Box sx={{ mt: 2, width: "100%" }}>
-                          <Typography
-                            variant="body1"
-                            sx={{ mb: 1, fontWeight: "bold" }}
-                          >
-                            Please upload screenshot to complete
-                          </Typography>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => setScreenshotFile(e.target.files[0])}
-                            style={{ marginBottom: "10px" }}
-                          />
-                          {uploading ? (
-                            <Box sx={{ width: "100%", mt: 1 }}>
-                              <Typography variant="body2">
-                                Uploading... {Math.round(uploadProgress)}%
-                              </Typography>
-                              <LinearProgress
-                                variant="determinate"
-                                value={uploadProgress}
-                                sx={{ height: 8, borderRadius: 5, mt: 1 }}
-                              />
                             </Box>
-                          ) : (
-                            <Button
-                              variant="contained"
-                              color="primary"
-                              onClick={handleUpload}
-                              disabled={!screenshotFile}
-                            >
-                              Upload Screenshot
-                            </Button>
-                          )}
-                        </Box>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </Box>
-        </Paper>
+                          </Box>
+                        )}
+
+                        {isActive && status === "awaiting_screenshot" && (
+                          <Box sx={{ mt: 2, width: "100%" }}>
+                            <Typography variant="body1" sx={{ mb: 1, fontWeight: "bold" }}>
+                              Please upload screenshot to complete
+                            </Typography>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => setScreenshotFile(e.target.files[0])}
+                              style={{ marginBottom: "10px" }}
+                            />
+                            {uploading ? (
+                              <Box sx={{ width: "100%", mt: 1 }}>
+                                <Typography variant="body2">Uploading... {Math.round(uploadProgress)}%</Typography>
+                                <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 8, borderRadius: 5, mt: 1 }} />
+                              </Box>
+                            ) : (
+                              <Button variant="contained" color="primary" onClick={handleUpload} disabled={!screenshotFile}>
+                                Upload Screenshot
+                              </Button>
+                            )}
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </Box>
+          </Paper>
+
+          {/* Custom duration dialog */}
+          <Dialog
+            open={openDialog}
+            onClose={() => setOpenDialog(false)}
+            PaperProps={{ sx: { borderRadius: 3, p: 1, width: "400px", maxWidth: "90%" } }}
+          >
+            <DialogTitle sx={{ fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              Set Duration for {classType}
+              <IconButton onClick={() => setOpenDialog(false)} size="small">
+                <Close />
+              </IconButton>
+            </DialogTitle>
+            <Divider />
+            <DialogContent sx={{ mt: 2 }}>
+              <Box sx={{ display: "flex", gap: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Hours</InputLabel>
+                  <Select value={selectedHours} onChange={(e) => setSelectedHours(e.target.value)}>
+                    {[...Array(6).keys()].map((h) => (
+                      <MenuItem key={h} value={h}>
+                        {h}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel>Minutes</InputLabel>
+                  <Select value={selectedMinutes} onChange={(e) => setSelectedMinutes(e.target.value)}>
+                    {[...Array(13).keys()].map((m) => (
+                      <MenuItem key={m * 5} value={m * 5}>
+                        {m * 5}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+              <Typography sx={{ mt: 2, fontSize: 13, color: "text.secondary" }}>
+                Minimum: {CLASS_SETTINGS[classType]?.duration || 0} minutes
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+              <Button variant="contained" color="primary" onClick={confirmStart}>
+                Start
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Confirm fixed class dialog */}
+          <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
+            <DialogTitle>Start {classType}?</DialogTitle>
+            <DialogActions>
+              <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
+              <Button variant="contained" onClick={startFixedClass}>
+                Start
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Cancel confirmation */}
+          <Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
+            <DialogTitle>Do you want to cancel this session?</DialogTitle>
+            <DialogActions>
+              <Button onClick={() => setCancelDialog(false)}>No</Button>
+              <Button variant="contained" color="error" onClick={handleCancel}>
+                Yes, Cancel
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Box>
       </Box>
-
-      {/* Custom duration dialog */}
-      <Dialog
-        open={openDialog}
-        onClose={() => setOpenDialog(false)}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            p: 1,
-            width: "400px",
-            maxWidth: "90%",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            fontWeight: "bold",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          Set Duration for {classType}
-          <IconButton onClick={() => setOpenDialog(false)} size="small">
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ mt: 2 }}>
-          <Box sx={{ display: "flex", gap: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel>Hours</InputLabel>
-              <Select
-                value={selectedHours}
-                onChange={(e) => setSelectedHours(e.target.value)}
-              >
-                {[...Array(6).keys()].map((h) => (
-                  <MenuItem key={h} value={h}>
-                    {h}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>Minutes</InputLabel>
-              <Select
-                value={selectedMinutes}
-                onChange={(e) => setSelectedMinutes(e.target.value)}
-              >
-                {[...Array(13).keys()].map((m) => (
-                  <MenuItem key={m * 5} value={m * 5}>
-                    {m * 5}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-          <Typography sx={{ mt: 2, fontSize: 13, color: "text.secondary" }}>
-            Minimum: {CLASS_SETTINGS[classType]?.duration || 0} minutes
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button variant="contained" color="primary" onClick={confirmStart}>
-            Start
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Confirm fixed class dialog */}
-      <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
-        <DialogTitle>Start {classType}?</DialogTitle>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={startFixedClass}>
-            Start
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Cancel confirmation */}
-      <Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
-        <DialogTitle>Do you want to cancel this session?</DialogTitle>
-        <DialogActions>
-          <Button onClick={() => setCancelDialog(false)}>No</Button>
-          <Button variant="contained" color="error" onClick={handleCancel}>
-            Yes, Cancel
-          </Button> 
-        </DialogActions> 
-      </Dialog>
-    </TeacherLayout>
+    </Box>
   );
 };
 
