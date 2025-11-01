@@ -63,6 +63,25 @@ const TeacherSidebar = ({ open, onToggleSidebar }) => {
 
   const drawerContent = (
     <>
+  {/* Toggle Button */}
+{!isMobile && (
+  <IconButton
+    onClick={onToggleSidebar}
+    color="inherit"
+    size="small"
+    sx={{
+      position: "absolute",
+      top: 15, // always at the top of the sidebar
+      right: open ? 16 : "50%", // right corner when expanded, center horizontally when collapsed
+      transform: open ? "translate(0,0)" : "translate(50%, 0)", // center horizontally on collapse
+      "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
+      transition: "all 0.3s ease",
+      zIndex: 2,
+    }}
+  >
+    <MenuIcon />
+  </IconButton>
+)}
       {/* Header / Avatar Section */}
       <Box
         sx={{
@@ -73,6 +92,7 @@ const TeacherSidebar = ({ open, onToggleSidebar }) => {
           mt: 1,
         }}
       >
+        
         {open && (
           <Box
             sx={{
@@ -108,22 +128,9 @@ const TeacherSidebar = ({ open, onToggleSidebar }) => {
           </Box>
         )}
 
-        {/* Hide toggle icon on mobile/tablet */}
-        {!isMobile && (
-          <IconButton
-            onClick={onToggleSidebar}
-            color="inherit"
-            size="small"
-            sx={{
-              "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
-            }}
-          >
-            <MenuIcon />
-          </IconButton>
-        )}
       </Box>
 
-      <Divider sx={{ borderColor: "rgba(255,255,255,0.2)" }} />
+      <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", marginTop: "24px"  }} />
 
       {/* Menu List */}
       <List>

@@ -46,6 +46,9 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
 
+// ✅ Define drawerWidth locally
+const drawerWidth = 240;
+
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const theme = useTheme();
@@ -73,12 +76,18 @@ const Dashboard = () => {
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const q = query(collection(db, "sessions"), where("teacherId", "==", currentUser.uid));
+    const q = query(
+      collection(db, "sessions"),
+      where("teacherId", "==", currentUser.uid)
+    );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => {
         const s = doc.data();
         const startTime =
-          s.startTime instanceof Timestamp ? s.startTime.toDate() : new Date(s.startTime);
+          s.startTime instanceof Timestamp
+            ? s.startTime.toDate()
+            : new Date(s.startTime);
 
         return {
           id: doc.id,
@@ -140,6 +149,7 @@ const Dashboard = () => {
         checkDate.setDate(checkDate.getDate() - 1);
       }
       setStreak(streakCount);
+
       const weeklyGoal = 20;
       setWeeklyProgress(Math.min((completedThisWeek / weeklyGoal) * 100, 100));
     });
@@ -246,9 +256,7 @@ const Dashboard = () => {
               }}
             />
           </Tooltip>
-        ) : (
-          "—"
-        ),
+        ) : "—",
     },
     {
       field: "delete",
@@ -263,7 +271,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <Box sx={{ display: "flex" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
       {/* Sidebar */}
       <TeacherSidebar
         open={sidebarOpen}
@@ -272,18 +280,17 @@ const Dashboard = () => {
 
       {/* Main content */}
       <Box
-        sx={{
-          flexGrow: 1,
-          minHeight: "100vh",
-          width: "100%",
-          transition: "all 0.3s ease",
-          display: "flex",
-          background:
-            "linear-gradient(135deg, rgba(220, 218, 253, 0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
-          flexDirection: "column",
-        }}
-      >
-        {/* Topbar fixed at top */}
+              component="main"
+              sx={{
+                flexGrow: 1,
+                width: { md: `calc(100% - ${sidebarOpen ? drawerWidth : 60}px)` },
+                transition: "width 0.3s",
+                minHeight: "100vh",
+                background:
+                  "linear-gradient(135deg, rgba(220, 218, 253, 0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
+              }}
+            >
+        {/* Topbar */}
         <TeacherTopbar
           open={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
@@ -294,8 +301,10 @@ const Dashboard = () => {
           sx={{
             flexGrow: 1,
             overflowY: "auto",
-            px: { xs: 3, sm: 3, md: 3 },
-            pt: '64px', // fixed padding top, matches Topbar height
+            px: { xs: 2, sm: 3, md: 3 },
+            pt: "64px",
+            background:
+              "linear-gradient(135deg, rgba(220, 218, 253,0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
           }}
         >
           {/* Dashboard content */}
@@ -370,12 +379,7 @@ const Dashboard = () => {
             <LinearProgress
               variant="determinate"
               value={weeklyProgress}
-              sx={{
-                height: 12,
-                borderRadius: 6,
-                mb: 1,
-                backgroundColor: "#d7e3fc",
-              }}
+              sx={{ height: 12, borderRadius: 6, mb: 1, backgroundColor: "#d7e3fc" }}
             />
             <Typography variant="body2" color="text.secondary">
               {weeklyProgress.toFixed(0)}% of your 20-class goal
@@ -395,10 +399,7 @@ const Dashboard = () => {
                   rows={sessions}
                   columns={columns}
                   disableSelectionOnClick
-                  sx={{
-                    border: "none",
-                    "& .MuiDataGrid-virtualScroller": { overflowX: "hidden" },
-                  }}
+                  sx={{ border: "none", "& .MuiDataGrid-virtualScroller": { overflowX: "hidden" } }}
                 />
               </Paper>
             )}
@@ -409,20 +410,12 @@ const Dashboard = () => {
       {/* Preview Dialog */}
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="sm" fullWidth>
         <DialogContent sx={{ position: "relative" }}>
-          <IconButton
-            onClick={() => setPreviewOpen(false)}
-            sx={{ position: "absolute", right: 8, top: 8 }}
-          >
+          <IconButton onClick={() => setPreviewOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
             <CloseIcon />
           </IconButton>
 
           {previewImage ? (
-            <Box
-              component="img"
-              src={previewImage}
-              alt="Screenshot Preview"
-              sx={{ width: "100%", borderRadius: 2 }}
-            />
+            <Box component="img" src={previewImage} alt="Screenshot Preview" sx={{ width: "100%", borderRadius: 2 }} />
           ) : (
             <Typography>No screenshot available</Typography>
           )}
@@ -434,20 +427,9 @@ const Dashboard = () => {
               </Typography>
               <Button variant="contained" component="label" sx={{ mt: 1 }}>
                 Upload New
-                <input
-                  type="file"
-                  hidden
-                  accept="image/*"
-                  onChange={(e) => handleReupload(e, selectedSession)}
-                />
+                <input type="file" hidden accept="image/*" onChange={(e) => handleReupload(e, selectedSession)} />
               </Button>
-              {uploading && (
-                <LinearProgress
-                  variant="determinate"
-                  value={progress}
-                  sx={{ mt: 2, height: 10, borderRadius: 2 }}
-                />
-              )}
+              {uploading && <LinearProgress variant="determinate" value={progress} sx={{ mt: 2, height: 10, borderRadius: 2 }} />}
             </Box>
           )}
         </DialogContent>
