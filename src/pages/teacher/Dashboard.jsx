@@ -385,25 +385,33 @@ const Dashboard = () => {
               {weeklyProgress.toFixed(0)}% of your 20-class goal
             </Typography>
           </Paper>
-
           {/* Sessions Table */}
-          <Box sx={{ mt: 4, overflowX: "auto" }}>
-            <Typography variant="h6" fontWeight="bold" gutterBottom>
-              Your Sessions
-            </Typography>
-            {loadingSessions ? (
-              <CircularProgress />
-            ) : (
-              <Paper sx={{ height: 500, borderRadius: 2, overflow: "hidden" }}>
-                <DataGrid
-                  rows={sessions}
-                  columns={columns}
-                  disableSelectionOnClick
-                  sx={{ border: "none", "& .MuiDataGrid-virtualScroller": { overflowX: "hidden" } }}
-                />
-              </Paper>
-            )}
-          </Box>
+            <Box sx={{ mt: 4, overflowX: "auto" }}>
+              <Typography variant="h6" fontWeight="bold" gutterBottom>
+                Your Sessions
+              </Typography>
+              {loadingSessions ? (
+                <CircularProgress />
+              ) : (
+                <Paper sx={{ height: 500, borderRadius: 2, overflow: "hidden" }}>
+                  <DataGrid
+                    rows={sessions}
+                    columns={columns}
+                    disableSelectionOnClick
+                    sx={{
+                      border: "none",
+                      "& .MuiDataGrid-virtualScroller": { overflowX: "auto" },
+                      cursor: "pointer",
+                    }}
+                    onRowClick={(params) => {
+                      setSelectedSession(params.row);
+                      setPreviewImage(params.row.screenshotUrl || null);
+                      setPreviewOpen(true);
+                    }}
+                  />
+                </Paper>
+              )}
+            </Box>
         </Box>
       </Box>
 
@@ -422,6 +430,11 @@ const Dashboard = () => {
 
           {selectedSession && (
             <Box sx={{ mt: 2 }}>
+              <Typography><strong>Date:</strong> {new Date(selectedSession.startTime).toLocaleString()}</Typography>
+              <Typography><strong>Class Type:</strong> {selectedSession.classType}</Typography>
+              <Typography><strong>Rate:</strong> ₱{selectedSession.rate.toLocaleString()}</Typography>
+              <Typography><strong>Earnings:</strong> ₱{selectedSession.totalEarnings.toLocaleString()}</Typography>
+              <Typography><strong>Status:</strong> {selectedSession.status}</Typography>
               <Typography variant="subtitle2" color="text.secondary">
                 Reupload Screenshot:
               </Typography>
