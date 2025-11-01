@@ -6,17 +6,22 @@ import {
   IconButton,
   Avatar,
   Box,
-  Divider,
+  Backdrop,
+  Slide,
   List,
   ListItem,
   ListItemButton,
-  ListItemText,
   ListItemIcon,
-  Backdrop,
+  ListItemText,
   Tooltip,
-  Slide,
   useMediaQuery,
 } from "@mui/material";
+import { useNavigate } from "react-router-dom";
+import { useTheme } from "@mui/material/styles";
+import { useAuth } from "../hooks/useAuth";
+import { db } from "../firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import pumpkinIcon from "../assets/pumpkin.png";
 import {
   Logout as LogoutIcon,
   Email as EmailIcon,
@@ -24,14 +29,6 @@ import {
   AccountCircle as ProfileIcon,
   KeyboardArrowRight as CloseIcon,
 } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
-import { useTheme } from "@mui/material/styles";
-import { useAuth } from "../hooks/useAuth";
-import { db } from "../firebase";
-import { doc, onSnapshot } from "firebase/firestore";
-
-const EXPANDED_WIDTH = 260;
-const COLLAPSED_WIDTH = 80;
 
 const TeacherTopbar = ({ open }) => {
   const { currentUser, logout } = useAuth();
@@ -45,7 +42,6 @@ const TeacherTopbar = ({ open }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [slideIn, setSlideIn] = useState(false);
 
-  // 🔹 Fetch live teacher profile
   useEffect(() => {
     if (!currentUser?.uid) return;
     const unsub = onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
@@ -58,7 +54,6 @@ const TeacherTopbar = ({ open }) => {
     return () => unsub();
   }, [currentUser]);
 
-  // 🔹 Drawer open/close logic
   const openDrawer = () => {
     setDrawerOpen(true);
     setTimeout(() => setSlideIn(true), 50);
@@ -77,56 +72,53 @@ const TeacherTopbar = ({ open }) => {
     }
   };
 
+  const EXPANDED_WIDTH = 260;
+  const COLLAPSED_WIDTH = 80;
   const sidebarWidth = open ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
 
   return (
     <>
-      {/* 🔹 Top AppBar */}
+      {/* Top AppBar */}
       <AppBar
-          position={isMobile && open ? "relative" : "fixed"}
-          elevation={0}
-          sx={{
-            width: { xs: "100%", md: `calc(101.5% - ${sidebarWidth}px)` },
-            ml: { xs: 0, md: `${sidebarWidth}px` },
-            background:
-              "linear-gradient(135deg, rgba(162,155,254,0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
-            backdropFilter: "blur(12px)",
-            boxShadow: "0px 2px 10px rgba(0,0,0,0.15)",
-            transition: "all 0.3s ease",
-            zIndex: isMobile && open ? 998 : 1201, // lower when sidebar open
-          }}
-        >
+        position={isMobile && open ? "relative" : "fixed"}
+        elevation={0}
+        sx={{
+          width: { xs: "100%", md: `calc(101.5% - ${sidebarWidth}px)` },
+          ml: { xs: 0, md: `${sidebarWidth}px` },
+          background: "rgba(0,0,0,0.35)",
+          backdropFilter: "blur(15px)",
+          boxShadow: "0px 0 20px #ff6f00 inset",
+          transition: "all 0.3s ease",
+          zIndex: isMobile && open ? 998 : 1201,
+        }}
+      >
         <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-          {/* ❌ Removed mobile toggle button */}
-
-          {/* Welcome Text */}
           <Typography
             variant="h6"
             sx={{
               fontWeight: "bold",
-              color: "#fff",
-              marginLeft:"60px",
-              textShadow: "1px 1px 3px rgba(0,0,0,0.2)",
+              color: "#ff6f00",
+              textShadow: "0 0 8px #ff3d00",
               flexGrow: 1,
+              marginLeft: "60px",
             }}
           >
-            🎓 Welcome Teacher {teacherName || ""}
+            🎃 Welcome Teacher {teacherName || ""}
           </Typography>
 
-          {/* Avatar Button */}
+          {/* Avatar / Drawer toggle */}
           <IconButton onClick={openDrawer} sx={{ p: 0 }}>
             <Avatar
+              src={photoURL || pumpkinIcon}
+              alt={teacherName || "Teacher"}
               sx={{
-                bgcolor: "#6c5ce7",
                 width: 42,
                 height: 42,
-                border: "2px solid rgba(255,255,255,0.3)",
-                boxShadow: "0 0 10px rgba(255,255,255,0.3)",
-                transition: "transform 0.2s ease",
+                border: "2px solid #ff6f00",
+                boxShadow: "0 0 10px #ff6f00, 0 0 20px #ff3d00",
+                animation: "glow 2s infinite alternate",
                 "&:hover": { transform: "scale(1.08)" },
               }}
-              alt={teacherName || "Teacher"}
-              src={photoURL || undefined}
             >
               {!photoURL && (teacherName ? teacherName[0].toUpperCase() : "T")}
             </Avatar>
@@ -134,18 +126,14 @@ const TeacherTopbar = ({ open }) => {
         </Toolbar>
       </AppBar>
 
-      {/* 🔹 Drawer Overlay */}
+      {/* Drawer Backdrop */}
       <Backdrop
         open={drawerOpen}
-        sx={{
-          zIndex: 1200,
-          backgroundColor: "rgba(0,0,0,0.35)",
-          backdropFilter: "blur(5px)",
-        }}
+        sx={{ zIndex: 1200, backgroundColor: "rgba(0,0,0,0.35)", backdropFilter: "blur(5px)" }}
         onClick={closeDrawer}
       />
 
-      {/* 🔹 Drawer Menu */}
+      {/* Drawer Menu */}
       {drawerOpen && (
         <Box
           sx={{
@@ -166,10 +154,9 @@ const TeacherTopbar = ({ open }) => {
                 width: "100%",
                 height: "100%",
                 borderRadius: "20px 0 0 20px",
-                background:
-            "linear-gradient(135deg, rgba(122, 117, 219, 0.85), rgba(116, 186, 255, 0.8), rgba(129,236,236,0.85))",
+                background: "rgba(0,0,0,0.35)",
                 backdropFilter: "blur(20px)",
-                boxShadow: "0 8px 25px rgba(0,0,0,0.5)",
+                boxShadow: "0 0 20px #ff6f00 inset",
                 color: "#fff",
                 display: "flex",
                 flexDirection: "column",
@@ -187,10 +174,7 @@ const TeacherTopbar = ({ open }) => {
                     right: 10,
                     bgcolor: "rgba(255,255,255,0.1)",
                     border: "1px solid rgba(255,255,255,0.2)",
-                    "&:hover": {
-                      bgcolor: "rgba(255,255,255,0.25)",
-                      transform: "scale(1.05)",
-                    },
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.25)", transform: "scale(1.05)" },
                   }}
                   size="small"
                 >
@@ -205,83 +189,52 @@ const TeacherTopbar = ({ open }) => {
                   overflowY: "auto",
                   p: 2,
                   "&::-webkit-scrollbar": { width: 6 },
-                  "&::-webkit-scrollbar-thumb": {
-                    background: "rgba(255,255,255,0.2)",
-                    borderRadius: 10,
-                  },
+                  "&::-webkit-scrollbar-thumb": { background: "rgba(255,255,255,0.2)", borderRadius: 10 },
                 }}
               >
                 {/* Profile Section */}
                 <Box sx={{ textAlign: "center", mt: 2 }}>
                   <Avatar
+                    src={photoURL || pumpkinIcon}
                     alt={teacherName}
-                    src={photoURL || undefined}
                     sx={{
                       width: 80,
                       height: 80,
                       mx: "auto",
                       mb: 1.5,
-                      bgcolor: "#6c5ce7",
-                      boxShadow: "0 0 20px rgba(108,92,231,0.5)",
+                      boxShadow: "0 0 20px #ff6f00, 0 0 30px #ff3d00",
+                      animation: "glow 2s infinite alternate",
                     }}
-                  >
-                    {!photoURL && (teacherName ? teacherName[0].toUpperCase() : "T")}
-                  </Avatar>
+                  />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     {teacherName || "Teacher"}
                   </Typography>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 1,
-                      mt: 0.5,
-                    }}
-                  >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 0.5 }}>
                     <EmailIcon fontSize="small" sx={{ color: "gray" }} />
-                    <Typography
-                      variant="body2"
-                      sx={{ color: "rgba(255,255,255,0.7)" }}
-                    >
+                    <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
                       {currentUser?.email}
                     </Typography>
                   </Box>
                 </Box>
 
-                <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.2)" }} />
-
-                {/* Menu Items */}
+                {/* Menu Items with pumpkin glow */}
                 <List>
                   {[
-                    {
-                      icon: <ProfileIcon sx={{ color: "#64B5F6" }} />,
-                      label: "My Profile",
-                      action: () => navigate("/teacher/profile"),
-                    },
-                    {
-                      icon: <SettingsIcon sx={{ color: "#FFD54F" }} />,
-                      label: "Settings",
-                      action: () => navigate("/teacher/settings"),
-                    },
-                    {
-                      icon: <LogoutIcon sx={{ color: "#FF5252" }} />,
-                      label: "Logout",
-                      action: handleLogout,
-                    },
+                    { icon: pumpkinIcon, label: "My Profile", action: () => navigate("/teacher/profile") },
+                    { icon: pumpkinIcon, label: "Settings", action: () => navigate("/teacher/settings") },
+                    { icon: pumpkinIcon, label: "Logout", action: handleLogout },
                   ].map((item, i) => (
                     <ListItem disablePadding key={i}>
-                      <ListItemButton onClick={item.action}>
-                        <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText
-                          primary={item.label}
-                          sx={{
-                            color: item.label === "Logout" ? "#FF5252" : "inherit",
-                            "& .MuiListItemText-primary": {
-                              fontWeight: item.label === "Logout" ? 600 : "inherit",
-                            },
-                          }}
-                        />
+                      <ListItemButton onClick={item.action} sx={{ "&:hover": { boxShadow: "0 0 15px #ff6f00" } }}>
+                        <ListItemIcon>
+                          <Box
+                            component="img"
+                            src={item.icon}
+                            alt="icon"
+                            sx={{ width: 24, height: 24, filter: "drop-shadow(0 0 4px #ff6f00) drop-shadow(0 0 10px #ff3d00)", animation: "glow 2s infinite alternate" }}
+                          />
+                        </ListItemIcon>
+                        <ListItemText primary={item.label} sx={{ color: "#fff" }} />
                       </ListItemButton>
                     </ListItem>
                   ))}
@@ -291,6 +244,17 @@ const TeacherTopbar = ({ open }) => {
           </Slide>
         </Box>
       )}
+
+      {/* Glowing Keyframes */}
+      <style>
+        {`
+          @keyframes glow {
+            0% { filter: drop-shadow(0 0 4px #ff6f00) drop-shadow(0 0 10px #ff3d00); }
+            50% { filter: drop-shadow(0 0 8px #ff6f00) drop-shadow(0 0 20px #ff3d00); }
+            100% { filter: drop-shadow(0 0 4px #ff6f00) drop-shadow(0 0 10px #ff3d00); }
+          }
+        `}
+      </style>
     </>
   );
 };

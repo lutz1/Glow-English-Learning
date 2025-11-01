@@ -32,6 +32,7 @@ import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
 import { useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import bg from "../../assets/bg.gif"; // spooky Halloween background
 
 const storage = getStorage();
 const drawerWidth = 240;
@@ -60,7 +61,6 @@ const Profile = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tempQR, setTempQR] = useState(null);
 
-  // Helper: Convert download URL back to path
   const getPathFromUrl = (url) => {
     try {
       const base = decodeURIComponent(url.split("/o/")[1].split("?")[0]);
@@ -70,7 +70,6 @@ const Profile = () => {
     }
   };
 
-  // Fetch teacher data
   useEffect(() => {
     const fetchTeacherData = async () => {
       if (!currentUser?.uid) return;
@@ -102,7 +101,6 @@ const Profile = () => {
 
   const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  // Handle QR Upload
   const handleUploadQR = async (e) => {
     if (!teacher?.id) {
       setSnackbar({ open: true, message: "Teacher account not ready yet. Please save profile first.", severity: "error" });
@@ -116,7 +114,6 @@ const Profile = () => {
     setUploadProgress(0);
 
     try {
-      // Delete old QR if exists
       if (formData.gcashQR) {
         const oldPath = getPathFromUrl(formData.gcashQR);
         if (oldPath) {
@@ -229,11 +226,50 @@ const Profile = () => {
   };
 
   return (
-    <Box sx={{ display: "flex" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+      {/* Halloween Background */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: `url(${bg}) center/cover no-repeat`,
+          zIndex: -3,
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "200%",
+          height: "200%",
+          background: "radial-gradient(rgba(0,0,0,0.25), transparent 70%)",
+          animation: "smoke 80s linear infinite",
+          zIndex: -2,
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8))",
+          zIndex: -1,
+        }}
+      />
+      <style>{`
+        @keyframes smoke {
+          0% { transform: translate(0,0) rotate(0deg); }
+          50% { transform: translate(-20%, -20%) rotate(180deg); }
+          100% { transform: translate(0,0) rotate(360deg); }
+        }
+      `}</style>
+
       <TeacherSidebar
         open={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        variant={isMobile ? "temporary" : "persistent"} // overlay on mobile
+        variant={isMobile ? "temporary" : "persistent"}
       />
 
       <Box
@@ -243,26 +279,11 @@ const Profile = () => {
           width: { md: `calc(100% - ${sidebarOpen && !isMobile ? drawerWidth : 60}px)` },
           transition: "width 0.3s",
           minHeight: "100vh",
-          background:
-            "linear-gradient(135deg, rgba(220,218,253,0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
-          position: "relative",
-          pt: "0px", // Reserve space for Topbar
+          color: "#fff",
         }}
       >
-        {/* ===== Topbar fixed at top ===== */}
-        <TeacherTopbar
-          open={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          sx={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            zIndex: 1200,
-          }}
-        />
+        <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
-        {/* ===== Page content ===== */}
         <Box sx={{ p: 3, display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
           <Paper
             sx={{
@@ -271,9 +292,10 @@ const Profile = () => {
               width: "100%",
               maxWidth: 700,
               borderRadius: 4,
-              boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-              bgcolor: "rgba(255,255,255,0.95)",
+              boxShadow: "0 0 20px rgba(255,87,34,0.5)",
+              bgcolor: "rgba(0,0,0,0.65)",
               backdropFilter: "blur(6px)",
+              color: "#fff",
             }}
           >
             {/* Avatar */}
@@ -284,38 +306,79 @@ const Profile = () => {
                   width: 80,
                   height: 80,
                   mr: 3,
-                  bgcolor: "#74b9ff",
+                  bgcolor: "#ff5722",
                   fontSize: 28,
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+                  boxShadow: "0 0 15px #ff9800",
                 }}
               >
                 {!formData.photoURL && (formData.name ? formData.name[0].toUpperCase() : "T")}
               </Avatar>
-              <Typography variant="h5" sx={{ color: "#2d3436", fontWeight: "bold" }}>
+              <Typography variant="h5" sx={{ color: "#ffcc00", fontWeight: "bold" }}>
                 {formData.name || "Teacher Name"}
               </Typography>
             </Box>
 
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: 2, borderColor: "#ff5722" }} />
 
             {/* Editable Fields */}
-            <TextField label="Full Name" name="name" value={formData.name} onChange={handleChange} fullWidth margin="normal" />
-            <TextField label="Phone Number" name="phone" value={formData.phone} onChange={handleChange} fullWidth margin="normal" />
-            <TextField label="Gender" name="gender" select value={formData.gender} onChange={handleChange} fullWidth margin="normal">
+            <TextField
+              label="Full Name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              InputProps={{ sx: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+            />
+            <TextField
+              label="Phone Number"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              InputProps={{ sx: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+            />
+            <TextField
+              label="Gender"
+              name="gender"
+              select
+              value={formData.gender}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              InputProps={{ sx: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+            >
               <MenuItem value="Male">Male</MenuItem>
               <MenuItem value="Female">Female</MenuItem>
               <MenuItem value="Other">Other</MenuItem>
             </TextField>
-            <TextField label="Profile Picture URL" name="photoURL" value={formData.photoURL} onChange={handleChange} fullWidth margin="normal" />
+            <TextField
+              label="Profile Picture URL"
+              name="photoURL"
+              value={formData.photoURL}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              InputProps={{ sx: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+            />
 
             {/* GCash QR Upload */}
             <Box sx={{ mt: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#ffcc00" }}>
                 GCash QR Code for Payroll
               </Typography>
               {formData.gcashQR ? (
                 <Box sx={{ mt: 1, mb: 2 }}>
-                  <img src={formData.gcashQR} alt="GCash QR" style={{ maxWidth: "200px", borderRadius: "8px", border: "1px solid #ddd" }} />
+                  <img
+                    src={formData.gcashQR}
+                    alt="GCash QR"
+                    style={{ maxWidth: "200px", borderRadius: "8px", border: "2px solid #ff9800" }}
+                  />
                   <Box sx={{ mt: 1 }}>
                     <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)}>
                       Remove QR
@@ -323,31 +386,31 @@ const Profile = () => {
                   </Box>
                 </Box>
               ) : (
-                <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ mb: 1, color: "#ffcc00" }}>
                   No QR uploaded yet
                 </Typography>
               )}
 
               {loading && uploadProgress > 0 && uploadProgress < 100 && (
                 <Box sx={{ mt: 2 }}>
-                  <LinearProgress variant="determinate" value={uploadProgress} />
+                  <LinearProgress variant="determinate" value={uploadProgress} sx={{ bgcolor: "#ffcc00" }} />
                   <Typography variant="body2" sx={{ mt: 1 }}>
                     Uploading... {Math.round(uploadProgress)}%
                   </Typography>
                 </Box>
               )}
 
-              <Button variant="outlined" component="label" disabled={loading}>
+              <Button variant="outlined" component="label" disabled={loading} sx={{ color: "#ffcc00", borderColor: "#ffcc00" }}>
                 Upload GCash QR
                 <input type="file" hidden accept="image/*" onChange={handleUploadQR} />
               </Button>
             </Box>
 
             {/* Email & Role */}
-            <Typography variant="body1" sx={{ mt: 3, color: "#2d3436" }}>
+            <Typography variant="body1" sx={{ mt: 3, color: "#ffcc00" }}>
               <strong>Email:</strong> {teacher?.email || currentUser?.email}
             </Typography>
-            <Typography variant="body1" sx={{ color: "#2d3436" }}>
+            <Typography variant="body1" sx={{ color: "#ffcc00" }}>
               <strong>Role:</strong> {teacher?.role || "Teacher"}
             </Typography>
 
@@ -355,10 +418,10 @@ const Profile = () => {
               variant="contained"
               sx={{
                 mt: 3,
-                bgcolor: "#55efc4",
-                color: "#2d3436",
+                bgcolor: "#ff5722",
+                color: "#fff",
                 fontWeight: "bold",
-                "&:hover": { bgcolor: "#00cec9" },
+                "&:hover": { bgcolor: "#ff9800" },
                 borderRadius: 3,
                 px: 3,
               }}
@@ -370,7 +433,7 @@ const Profile = () => {
           </Paper>
         </Box>
 
-        {/* Upload Preview Confirmation Dialog */}
+        {/* Preview and Delete Dialogs (unchanged) */}
         <Dialog open={previewDialogOpen} onClose={() => setPreviewDialogOpen(false)}>
           <DialogTitle>Confirm GCash QR Upload</DialogTitle>
           <DialogContent>
@@ -389,7 +452,6 @@ const Profile = () => {
           </DialogActions>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
         <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
           <DialogTitle>Remove GCash QR Code</DialogTitle>
           <DialogContent>

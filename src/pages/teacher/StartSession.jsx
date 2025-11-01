@@ -20,14 +20,7 @@ import {
   IconButton,
 } from "@mui/material";
 import { motion } from "framer-motion";
-import {
-  Groups,
-  Language,
-  EmojiEvents,
-  Person,
-  Translate,
-  Close,
-} from "@mui/icons-material";
+import { Groups, Language, EmojiEvents, Person, Translate, Close } from "@mui/icons-material";
 
 import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
@@ -47,8 +40,8 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
 import { useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import bg from "../../assets/bg.gif"; // spooky Halloween background
 
-// ✅ Class settings
 const CLASS_SETTINGS = {
   "Private Class": {
     rate: 100,
@@ -364,7 +357,46 @@ const StartSession = () => {
   };
 
   return (
-    <Box sx={{ display: "flex" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+      {/* Halloween Background */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: `url(${bg}) center/cover no-repeat`,
+          zIndex: -3,
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "200%",
+          height: "200%",
+          background: "radial-gradient(rgba(0,0,0,0.25), transparent 70%)",
+          animation: "smoke 80s linear infinite",
+          zIndex: -2,
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8))",
+          zIndex: -1,
+        }}
+      />
+      <style>{`
+        @keyframes smoke {
+          0% { transform: translate(0,0) rotate(0deg); }
+          50% { transform: translate(-20%, -20%) rotate(180deg); }
+          100% { transform: translate(0,0) rotate(360deg); }
+        }
+      `}</style>
+
       <TeacherSidebar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <Box
         component="main"
@@ -373,27 +405,36 @@ const StartSession = () => {
           width: { md: `calc(100% - ${sidebarOpen ? drawerWidth : 60}px)` },
           transition: "width 0.3s",
           minHeight: "100vh",
-          background:
-            "linear-gradient(135deg, rgba(220, 218, 253, 0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
+          color: "#fff",
         }}
       >
         <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ flexGrow: 1, overflowY: "auto", px: { xs: 2, sm: 3, md: 3 }, pt: "64px" }}>
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+            gutterBottom
+            sx={{ color: "#ff9800", textShadow: "0 0 12px #ff5722", textAlign: "center" }}
+          >
+            🎃 Spooky Start Session
+          </Typography>
+          <Typography
+            variant="subtitle1"
+            sx={{ mb: 4, color: "#f5f5f5", textShadow: "0 0 4px #ff9800", textAlign: "center" }}
+          >
+            Begin your classes in Halloween style! Track time, earnings, and upload screenshots.
+          </Typography>
+
           {/* ===== Main Paper UI ===== */}
           <Paper
             sx={{
-              mt: 6,
               p: 4,
               borderRadius: 3,
               backdropFilter: "blur(12px)",
-              background: "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(245,245,245,0.7))",
+              background: "rgba(0,0,0,0.25)",
             }}
           >
-            <Typography variant="h4" mb={4} fontWeight="bold" align="center" sx={{ color: "#333" }}>
-              🎓 Start a Teaching Session
-            </Typography>
-
             <Box
               sx={{
                 display: "grid",
@@ -402,8 +443,7 @@ const StartSession = () => {
               }}
             >
               {Object.keys(CLASS_SETTINGS).map((key) => {
-                const isActive =
-                  classType === key && (status === "ongoing" || status === "awaiting_screenshot");
+                const isActive = classType === key && (status === "ongoing" || status === "awaiting_screenshot");
                 const classConfig = CLASS_SETTINGS[key];
 
                 return (
@@ -426,6 +466,7 @@ const StartSession = () => {
                         p: 2,
                         opacity: !isActive && (running || status === "awaiting_screenshot") ? 0.5 : 1,
                         pointerEvents: !isActive && (running || status === "awaiting_screenshot") ? "none" : "auto",
+                        boxShadow: `0 0 15px ${isActive ? "#ff5722" : "rgba(0,0,0,0.2)"}`,
                       }}
                     >
                       <CardContent sx={{ textAlign: "center", width: "100%" }}>
@@ -443,21 +484,19 @@ const StartSession = () => {
                         {isActive && status === "ongoing" && (
                           <Box sx={{ mt: 2 }}>
                             <Typography variant="h5">⏱ {formatMMSS(elapsedSeconds)}</Typography>
-
-                            <Box sx={{ marginTop: "12px" }}>
-                              <Typography
-                                variant="h5"
-                                sx={{
-                                  fontWeight: "bold",
-                                  display: "flex",
-                                  justifyContent: "center",
-                                  alignItems: "center",
-                                  gap: 1,
-                                }}
-                              >
-                                💰 ₱{classConfig.rate}
-                              </Typography>
-                            </Box>
+                            <Typography
+                              variant="h5"
+                              sx={{
+                                fontWeight: "bold",
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                gap: 1,
+                                mt: 1,
+                              }}
+                            >
+                              💰 ₱{classConfig.rate}
+                            </Typography>
 
                             <Box sx={{ mt: 2, display: "flex", gap: 1, justifyContent: "center" }}>
                               <Button variant="contained" color="success" onClick={handleStop}>
@@ -478,7 +517,7 @@ const StartSession = () => {
                         {isActive && status === "awaiting_screenshot" && (
                           <Box sx={{ mt: 2, width: "100%" }}>
                             <Typography variant="body1" sx={{ mb: 1, fontWeight: "bold" }}>
-                              Please upload screenshot to complete
+                              🕸 Please upload screenshot to complete
                             </Typography>
                             <input
                               type="file"
@@ -489,10 +528,19 @@ const StartSession = () => {
                             {uploading ? (
                               <Box sx={{ width: "100%", mt: 1 }}>
                                 <Typography variant="body2">Uploading... {Math.round(uploadProgress)}%</Typography>
-                                <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 8, borderRadius: 5, mt: 1 }} />
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={uploadProgress}
+                                  sx={{ height: 8, borderRadius: 5, mt: 1 }}
+                                />
                               </Box>
                             ) : (
-                              <Button variant="contained" color="primary" onClick={handleUpload} disabled={!screenshotFile}>
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleUpload}
+                                disabled={!screenshotFile}
+                              >
                                 Upload Screenshot
                               </Button>
                             )}
@@ -506,7 +554,7 @@ const StartSession = () => {
             </Box>
           </Paper>
 
-          {/* Custom duration dialog */}
+          {/* Dialogs remain unchanged */}
           <Dialog
             open={openDialog}
             onClose={() => setOpenDialog(false)}
@@ -554,7 +602,6 @@ const StartSession = () => {
             </DialogActions>
           </Dialog>
 
-          {/* Confirm fixed class dialog */}
           <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
             <DialogTitle>Start {classType}?</DialogTitle>
             <DialogActions>
@@ -565,7 +612,6 @@ const StartSession = () => {
             </DialogActions>
           </Dialog>
 
-          {/* Cancel confirmation */}
           <Dialog open={cancelDialog} onClose={() => setCancelDialog(false)}>
             <DialogTitle>Do you want to cancel this session?</DialogTitle>
             <DialogActions>

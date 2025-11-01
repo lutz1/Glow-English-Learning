@@ -1,3 +1,4 @@
+// src/pages/teacher/Settings.jsx
 import React, { useState } from "react";
 import {
   Box,
@@ -23,6 +24,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { useTheme } from "@mui/material/styles";
 import { useMediaQuery } from "@mui/material";
+import bg from "../../assets/bg.gif"; // spooky Halloween background
 
 const drawerWidth = 240;
 
@@ -71,7 +73,46 @@ const Settings = () => {
   };
 
   return (
-    <Box sx={{ display: "flex" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+      {/* Halloween Background */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: `url(${bg}) center/cover no-repeat`,
+          zIndex: -3,
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "200%",
+          height: "200%",
+          background: "radial-gradient(rgba(0,0,0,0.25), transparent 70%)",
+          animation: "smoke 80s linear infinite",
+          zIndex: -2,
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.85))",
+          zIndex: -1,
+        }}
+      />
+      <style>{`
+        @keyframes smoke {
+          0% { transform: translate(0,0) rotate(0deg); }
+          50% { transform: translate(-20%, -20%) rotate(180deg); }
+          100% { transform: translate(0,0) rotate(360deg); }
+        }
+      `}</style>
+
       {/* Sidebar */}
       <TeacherSidebar
         open={sidebarOpen}
@@ -87,32 +128,20 @@ const Settings = () => {
           width: { md: `calc(100% - ${sidebarOpen && !isMobile ? drawerWidth : 60}px)` },
           minHeight: "100vh",
           transition: "width 0.3s",
-          background:
-            "linear-gradient(135deg, rgba(220,218,253,0.85), rgba(116,185,255,0.85), rgba(129,236,236,0.85))",
-          position: "relative",
+          color: "#fff",
         }}
       >
-        {/* ===== Topbar fixed at top ===== */}
-        <TeacherTopbar
-          open={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          sx={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            zIndex: 1200,
-          }}
-        />
+        {/* Topbar */}
+        <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
-        {/* Content Area */}
+        {/* Content */}
         <Box
           sx={{
             p: 3,
             display: "flex",
             justifyContent: "center",
             alignItems: "flex-start",
-            pt: { xs: 8, sm: 10 }, // space for Topbar
+            pt: { xs: 8, sm: 10 },
           }}
         >
           <Paper
@@ -123,16 +152,16 @@ const Settings = () => {
               maxWidth: 500,
               borderRadius: 4,
               textAlign: "center",
-              background: "rgba(255,255,255,0.85)",
+              background: "rgba(0,0,0,0.7)",
               backdropFilter: "blur(10px)",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+              boxShadow: "0 8px 32px rgba(255,87,34,0.5)",
             }}
           >
-            <LockIcon sx={{ fontSize: 40, color: "#0984e3", mb: 1 }} />
-            <Typography variant="h5" fontWeight="bold" gutterBottom>
+            <LockIcon sx={{ fontSize: 40, color: "#ff5722", mb: 1, textShadow: "0 0 8px #ff9800" }} />
+            <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ color: "#ffcc00" }}>
               Change Password
             </Typography>
-            <Typography variant="body2" sx={{ mb: 3, color: "#555" }}>
+            <Typography variant="body2" sx={{ mb: 3, color: "#ffa500" }}>
               Update your account password securely.
             </Typography>
 
@@ -144,11 +173,12 @@ const Settings = () => {
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ bgcolor: "rgba(255,255,255,0.7)", borderRadius: 2 }}
+              sx={{ bgcolor: "rgba(255,255,255,0.1)", borderRadius: 2, input: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: "#ffcc00" }}>
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -164,7 +194,8 @@ const Settings = () => {
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ bgcolor: "rgba(255,255,255,0.7)", borderRadius: 2 }}
+              sx={{ bgcolor: "rgba(255,255,255,0.1)", borderRadius: 2, input: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
             />
 
             <TextField
@@ -175,18 +206,19 @@ const Settings = () => {
               onChange={handleChange}
               fullWidth
               margin="normal"
-              sx={{ bgcolor: "rgba(255,255,255,0.7)", borderRadius: 2 }}
+              sx={{ bgcolor: "rgba(255,255,255,0.1)", borderRadius: 2, input: { color: "#fff" } }}
+              InputLabelProps={{ sx: { color: "#ffcc00" } }}
             />
 
             <Button
               variant="contained"
               sx={{
                 mt: 3,
-                bgcolor: "#55efc4",
-                color: "#2d3436",
+                bgcolor: "#ff5722",
+                color: "#fff",
                 fontWeight: "bold",
                 borderRadius: 3,
-                "&:hover": { bgcolor: "#00cec9" },
+                "&:hover": { bgcolor: "#ff9800" },
               }}
               onClick={handlePasswordChange}
               disabled={loading}
@@ -197,6 +229,7 @@ const Settings = () => {
           </Paper>
         </Box>
 
+        {/* Snackbar */}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={4000}
