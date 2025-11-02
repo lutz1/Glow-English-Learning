@@ -122,19 +122,17 @@ const Dashboard = () => {
     return { start, end };
   };
 
-  const normalizeRange = (rangeObj) => {
-    // Accepts object with start and end possibly Date or null
-    if (rangeObj?.start && rangeObj?.end) {
-      const s = new Date(rangeObj.start);
-      s.setHours(0, 0, 0, 0);
-      const e = new Date(rangeObj.end);
-      e.setHours(23, 59, 59, 999);
-      return { start: s, end: e, label: `${s.toLocaleDateString()} — ${e.toLocaleDateString()}` };
-    }
-    // default to today
-    const t = getTodayRange();
-    return { start: t.start, end: t.end, label: `${t.start.toLocaleDateString()}` };
-  };
+  // --- Add or replace this normalizeRange() helper ---
+function normalizeRange(range) {
+  const start = range?.start ? new Date(range.start) : new Date();
+  const end = range?.end ? new Date(range.end) : new Date();
+
+  // Normalize to local time zone — full day range
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+}
 
   // --- Firestore: load teachers ---
   useEffect(() => {
@@ -225,29 +223,112 @@ const Dashboard = () => {
 
   // Update filteredSessions whenever sessions, latestRange or status sorting changes
   const [filteredSessions, setFilteredSessions] = useState([]);
-  useEffect(() => {
-    const { start, end } = normalizeRange(latestRange);
-    const filtered = sessions.filter((s) => {
-      const ts = s.startTime?.toDate ? s.startTime.toDate() : s.startTime ? new Date(s.startTime) : null;
-      if (!ts) return false;
-      return ts >= start && ts <= end;
-    });
 
-    // sort by custom status order first, then by startTime descending
-    filtered.sort((a, b) => {
-      const aStatus = (a.status || "").toLowerCase();
-      const bStatus = (b.status || "").toLowerCase();
-      const idxA = statusOrder.indexOf(aStatus) >= 0 ? statusOrder.indexOf(aStatus) : statusOrder.length;
-      const idxB = statusOrder.indexOf(bStatus) >= 0 ? statusOrder.indexOf(bStatus) : statusOrder.length;
-      if (idxA !== idxB) return statusSortAsc ? idxA - idxB : idxB - idxA;
+// Update filteredSessions whenever sessions, latestRange, or sorting changes
+useEffect(() => {
+  if (!sessions || sessions.length === 0) {
+    setFilteredSessions([]);
+    return;
+  }
 
-      const ta = a.startTime?.toDate ? a.startTime.toDate() : a.startTime ? new Date(a.startTime) : null;
-      const tb = b.startTime?.toDate ? b.startTime.toDate() : b.startTime ? new Date(b.startTime) : null;
-      return (tb?.getTime() || 0) - (ta?.getTime() || 0);
-    });
+  // --- Normalize range to local midnight boundaries ---
+  const normalizeRange = (range) => {
+    const start = range.start ? new Date(range.start) : null;
+    const end = range.end ? new Date(range.end) : null;
 
-    setFilteredSessions(filtered);
-  }, [sessions, latestRange, statusSortAsc]);
+    if (start) start.setHours(0, 0, 0, 0); // local midnight start
+    if (end) end.setHours(23, 59, 59, 999); // local end of day
+
+    return { start, end };
+  };
+
+  const { start, end } =
+    latestRange?.start && latestRange?.end
+      ? normalizeRange(latestRange)
+      : (() => {
+          // Default: today's full range (local)
+          const now = new Date();
+          const s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+          const e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          return { start: s, end: e };
+        })();
+
+  // --- Filter sessions ---
+  const filtered = sessions.filter((s) => {
+    const statusValue = (s.status || "").trim().toLowerCase();
+    const startTs = s.startTime?.toDate
+      ? s.startTime.toDate()
+      : s.startTime
+      ? new Date(s.startTime)
+      : null;
+    const endTs = s.endTime?.toDate
+      ? s.endTime.toDate()
+      : s.endTime
+      ? new Date(s.endTime)
+      : null;
+
+    // Always show ongoing
+    if (statusValue === "ongoing") return true;
+
+    if (!startTs && !endTs) return false;
+
+    // Compare using local times
+    return (
+      (startTs && startTs >= start && startTs <= end) ||
+      (endTs && endTs >= start && endTs <= end)
+    );
+  });
+
+  // --- Sort sessions by status and startTime (latest first) ---
+  filtered.sort((a, b) => {
+    const aStatus = (a.status || "").trim().toLowerCase();
+    const bStatus = (b.status || "").trim().toLowerCase();
+
+    const idxA =
+      statusOrder.indexOf(aStatus) >= 0
+        ? statusOrder.indexOf(aStatus)
+        : statusOrder.length;
+    const idxB =
+      statusOrder.indexOf(bStatus) >= 0
+        ? statusOrder.indexOf(bStatus)
+        : statusOrder.length;
+
+    if (idxA !== idxB) {
+      return statusSortAsc ? idxA - idxB : idxB - idxA;
+    }
+
+    const ta = a.startTime?.toDate
+      ? a.startTime.toDate()
+      : a.startTime
+      ? new Date(a.startTime)
+      : null;
+    const tb = b.startTime?.toDate
+      ? b.startTime.toDate()
+      : b.startTime
+      ? new Date(b.startTime)
+      : null;
+
+    return (tb?.getTime() || 0) - (ta?.getTime() || 0);
+  });
+
+  // --- Debug helper (optional) ---
+  console.log(
+    "📅 Range:",
+    start.toString(),
+    "→",
+    end.toString(),
+    "\nFiltered sessions:",
+    filtered.map((s) => ({
+      id: s.id,
+      status: s.status,
+      start: s.startTime?.toDate
+        ? s.startTime.toDate().toString()
+        : s.startTime,
+    }))
+  );
+
+  setFilteredSessions(filtered);
+}, [sessions, latestRange, statusSortAsc, teachersMap]);
 
   // updateChartData (earnings per teacher per class type) kept for other usages
   const updateChartData = (sessionsArray) => {
@@ -899,4 +980,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default Dashboard; 
