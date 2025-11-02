@@ -17,6 +17,8 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useNavigate } from "react-router-dom";
@@ -33,7 +35,7 @@ import {
   getDocs,
   setDoc,
 } from "firebase/firestore";
-import gcashQR from "../assets/gcash.jpg"; // ✅ Static local QR image
+import gcashQR from "../assets/gcash.jpg";
 
 const Topbar = () => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -46,6 +48,8 @@ const Topbar = () => {
   const [walletOpen, setWalletOpen] = useState(false);
   const [totalTax, setTotalTax] = useState(0);
   const [loadingQR, setLoadingQR] = useState(true);
+  const [unsubscribeSessions, setUnsubscribeSessions] = useState(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   const open = Boolean(anchorEl);
   const notifOpen = Boolean(notifAnchorEl);
@@ -54,7 +58,6 @@ const Topbar = () => {
   useEffect(() => {
     let unsubscribeUser = () => {};
 
-    // ✅ Listen to auth state
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUserEmail(user.email);
@@ -74,7 +77,7 @@ const Topbar = () => {
       }
     });
 
-    // ✅ Notifications listener
+    // 🔔 Notifications listener
     const notifQuery = query(
       collection(db, "notifications"),
       orderBy("createdAt", "desc")
@@ -126,21 +129,29 @@ const Topbar = () => {
       unsubscribeAuth();
       unsubscribeUser();
       unsubscribeNotif();
+      if (unsubscribeSessions) unsubscribeSessions();
     };
   }, []);
 
-  // 🔹 Fetch total ₱0.50 per session
-  const fetchWalletData = async () => {
-    try {
-      setLoadingQR(true);
-      const sessionSnap = await getDocs(collection(db, "sessions"));
-      const total = sessionSnap.size * 0.5;
-      setTotalTax(total);
-    } catch (err) {
-      console.error("Error fetching wallet data:", err);
-    } finally {
+  // 💰 Real-time listener for sessions (only active while dialog open)
+  const startSessionListener = () => {
+    setLoadingQR(true);
+    const q = collection(db, "sessions");
+    const unsub = onSnapshot(q, (snapshot) => {
+      let unpaidCount = 0;
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.paidForTax) unpaidCount++;
+      });
+      setTotalTax(unpaidCount * 1);
       setLoadingQR(false);
-    }
+    });
+    setUnsubscribeSessions(() => unsub);
+  };
+
+  const stopSessionListener = () => {
+    if (unsubscribeSessions) unsubscribeSessions();
+    setUnsubscribeSessions(null);
   };
 
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
@@ -165,22 +176,48 @@ const Topbar = () => {
     signOut(auth).then(() => navigate("/login"));
   };
 
-  // 🔹 Open wallet dialog
   const handleOpenWallet = async () => {
     handleMenuClose();
-    await fetchWalletData();
+    startSessionListener();
     setWalletOpen(true);
   };
 
-  // 🔹 Reset total after payment
-  const handleDonePayment = async () => {
-    setTotalTax(0);
-    await setDoc(doc(db, "settings", "lastPayment"), {
-      timestamp: new Date(),
-      amountPaid: totalTax,
-    });
-    alert("Payment confirmed. Total reset to ₱0.00.");
+  const handleCloseWallet = () => {
+    stopSessionListener();
     setWalletOpen(false);
+  };
+
+  // ✅ After payment: mark sessions as paid + reset total + show snackbar
+  const handleDonePayment = async () => {
+    try {
+      const sessionSnap = await getDocs(collection(db, "sessions"));
+      const updates = [];
+      sessionSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.paidForTax) {
+          updates.push(
+            updateDoc(doc(db, "sessions", docSnap.id), { paidForTax: true })
+          );
+        }
+      });
+      await Promise.all(updates);
+
+      await setDoc(doc(db, "settings", "lastPayment"), {
+        timestamp: new Date(),
+        amountPaid: totalTax,
+      });
+
+      setTotalTax(0);
+      setSnackbarOpen(true); // ✅ show success snackbar
+      handleCloseWallet();
+    } catch (err) {
+      console.error("Error marking sessions as paid:", err);
+    }
+  };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === "clickaway") return;
+    setSnackbarOpen(false);
   };
 
   return (
@@ -202,14 +239,12 @@ const Topbar = () => {
           </Typography>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            {/* Notifications */}
             <IconButton color="inherit" onClick={handleNotifOpen}>
               <Badge badgeContent={unreadCount} color="error">
                 <NotificationsIcon sx={{ color: "#f1c40f" }} />
               </Badge>
             </IconButton>
 
-            {/* Notifications dropdown */}
             <Menu
               anchorEl={notifAnchorEl}
               open={notifOpen}
@@ -253,7 +288,6 @@ const Topbar = () => {
               ))}
             </Menu>
 
-            {/* User name & avatar */}
             <Typography>{userName}</Typography>
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
               <Avatar src={photoURL || undefined}>
@@ -261,7 +295,6 @@ const Topbar = () => {
               </Avatar>
             </IconButton>
 
-            {/* User Menu */}
             <Menu
               anchorEl={anchorEl}
               open={open}
@@ -291,7 +324,7 @@ const Topbar = () => {
       {/* 💰 E-Wallet Dialog */}
       <Dialog
         open={walletOpen}
-        onClose={() => setWalletOpen(false)}
+        onClose={handleCloseWallet}
         maxWidth="xs"
         fullWidth
       >
@@ -321,7 +354,7 @@ const Topbar = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: "space-between" }}>
-          <Button onClick={() => setWalletOpen(false)}>Close</Button>
+          <Button onClick={handleCloseWallet}>Close</Button>
           {userEmail !== "robert.llemit@gmail.com" && (
             <Button variant="contained" color="success" onClick={handleDonePayment}>
               Done Payment
@@ -329,6 +362,23 @@ const Topbar = () => {
           )}
         </DialogActions>
       </Dialog>
+
+      {/* ✅ Snackbar Toast Notification */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity="success"
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          ✅ Payment confirmed. Total reset to ₱0.00.
+        </Alert>
+      </Snackbar>
     </>
   );
 };
