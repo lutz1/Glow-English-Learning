@@ -1,4 +1,4 @@
-// src/pages/teacher/StartSession.jsx
+// src/pages/teacher/StartSession.jsx 
 import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
@@ -18,9 +18,10 @@ import {
   LinearProgress,
   Divider,
   IconButton,
+  Tooltip,
 } from "@mui/material";
 import { motion } from "framer-motion";
-import { Groups, Language, EmojiEvents, Person, Translate, Close } from "@mui/icons-material";
+import { Groups, Language, EmojiEvents, Person, Translate, Close, InfoOutlined } from "@mui/icons-material";
 
 import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
@@ -49,6 +50,9 @@ const CLASS_SETTINGS = {
     icon: <Person fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #42a5f5, #1e88e5)",
     custom: true,
+    // tooltip content added
+    tooltip:
+      "Absences are not paid.\n\nIn case of emergency, please inform Miss Grace directly.\n\nSalary: Every 16th of the month.",
   },
   "Group Class": {
     rate: 200,
@@ -56,6 +60,8 @@ const CLASS_SETTINGS = {
     icon: <Groups fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #ab47bc, #8e24aa)",
     custom: false,
+    tooltip:
+      "In case of emergency, please inform Miss Anklhyyn directly.\n\nSalary: Every 16th of the month.",
   },
   "Hao Class": {
     rate: 75,
@@ -63,13 +69,17 @@ const CLASS_SETTINGS = {
     icon: <Translate fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #ff9800, #f57c00)",
     custom: false,
+    tooltip:
+      "Absences are still paid as long as you stay in the class for the full 25 minutes.\n\nIn case of emergency, please inform the parents in the GC.\n\nSalary: Every 1st and 16th of the month.",
   },
   "Vietnamese Class": {
-    rate: 75,
-    duration: 30,
+    rate: 75, // changed to ₱75
+    duration: 25, // changed to 25 minutes
     icon: <Language fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #66bb6a, #388e3c)",
     custom: true,
+    tooltip:
+      "Absent with permission: Not paid\n\nAbsent without permission: Half paid\n\nIn case of emergency, please inform the parents in the GC and Ma’am Thanh.\n\nSalary: Every 1st and 16th of the month.",
   },
   IELTS: {
     rate: 250,
@@ -77,6 +87,7 @@ const CLASS_SETTINGS = {
     icon: <EmojiEvents fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #fdd835, #fbc02d)",
     custom: false,
+    tooltip: "",
   },
 };
 
@@ -447,108 +458,114 @@ const StartSession = () => {
                 const classConfig = CLASS_SETTINGS[key];
 
                 return (
-                  <motion.div
+                  <Tooltip
                     key={key}
-                    whileHover={!isActive ? { scale: 1.05 } : {}}
-                    whileTap={!isActive ? { scale: 0.95 } : {}}
-                    onClick={() => handleClassClick(key)}
+                    title={<Box sx={{ whiteSpace: "pre-line", fontSize: 13 }}>{classConfig.tooltip}</Box>}
+                    arrow
+                    placement="top"
                   >
-                    <Card
-                      sx={{
-                        minHeight: 200,
-                        color: "#fff",
-                        background: classConfig.gradient,
-                        borderRadius: 3,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        p: 2,
-                        opacity: !isActive && (running || status === "awaiting_screenshot") ? 0.5 : 1,
-                        pointerEvents: !isActive && (running || status === "awaiting_screenshot") ? "none" : "auto",
-                        boxShadow: `0 0 15px ${isActive ? "#ff5722" : "rgba(0,0,0,0.2)"}`,
-                      }}
+                    <motion.div
+                      whileHover={!isActive ? { scale: 1.05 } : {}}
+                      whileTap={!isActive ? { scale: 0.95 } : {}}
+                      onClick={() => handleClassClick(key)}
                     >
-                      <CardContent sx={{ textAlign: "center", width: "100%" }}>
-                        {classConfig.icon}
-                        <Typography variant="h6" sx={{ mt: 1, fontWeight: 700 }}>
-                          {key}
-                        </Typography>
-
-                        {!isActive && (
-                          <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.9 }}>
-                            ₱{classConfig.rate} ({classConfig.duration} mins)
+                      <Card
+                        sx={{
+                          minHeight: 200,
+                          color: "#fff",
+                          background: classConfig.gradient,
+                          borderRadius: 3,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          p: 2,
+                          opacity: !isActive && (running || status === "awaiting_screenshot") ? 0.5 : 1,
+                          pointerEvents: !isActive && (running || status === "awaiting_screenshot") ? "none" : "auto",
+                          boxShadow: `0 0 15px ${isActive ? "#ff5722" : "rgba(0,0,0,0.2)"}`,
+                        }}
+                      >
+                        <CardContent sx={{ textAlign: "center", width: "100%" }}>
+                          {classConfig.icon}
+                          <Typography variant="h6" sx={{ mt: 1, fontWeight: 700 }}>
+                            {key}
                           </Typography>
-                        )}
 
-                        {isActive && status === "ongoing" && (
-                          <Box sx={{ mt: 2 }}>
-                            <Typography variant="h5">⏱ {formatMMSS(elapsedSeconds)}</Typography>
-                            <Typography
-                              variant="h5"
-                              sx={{
-                                fontWeight: "bold",
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                gap: 1,
-                                mt: 1,
-                              }}
-                            >
-                              💰 ₱{classConfig.rate}
+                          {!isActive && (
+                            <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.9 }}>
+                              ₱{classConfig.rate} ({classConfig.duration} mins)
                             </Typography>
+                          )}
 
-                            <Box sx={{ mt: 2, display: "flex", gap: 1, justifyContent: "center" }}>
-                              <Button variant="contained" color="success" onClick={handleStop}>
-                                Stop
-                              </Button>
-                              <Button variant="contained" color="error" onClick={() => setCancelDialog(true)}>
-                                Cancel
-                              </Button>
-                              {key === "Vietnamese Class" && elapsedSeconds >= 900 && (
-                                <Button variant="contained" color="warning" onClick={handleHalfPay}>
-                                  Half Pay
+                          {isActive && status === "ongoing" && (
+                            <Box sx={{ mt: 2 }}>
+                              <Typography variant="h5">⏱ {formatMMSS(elapsedSeconds)}</Typography>
+                              <Typography
+                                variant="h5"
+                                sx={{
+                                  fontWeight: "bold",
+                                  display: "flex",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  gap: 1,
+                                  mt: 1,
+                                }}
+                              >
+                                💰 ₱{classConfig.rate}
+                              </Typography>
+
+                              <Box sx={{ mt: 2, display: "flex", gap: 1, justifyContent: "center" }}>
+                                <Button variant="contained" color="success" onClick={handleStop}>
+                                  Stop
+                                </Button>
+                                <Button variant="contained" color="error" onClick={() => setCancelDialog(true)}>
+                                  Cancel
+                                </Button>
+                                {key === "Vietnamese Class" && elapsedSeconds >= 900 && (
+                                  <Button variant="contained" color="warning" onClick={handleHalfPay}>
+                                    Half Pay
+                                  </Button>
+                                )}
+                              </Box>
+                            </Box>
+                          )}
+
+                          {isActive && status === "awaiting_screenshot" && (
+                            <Box sx={{ mt: 2, width: "100%" }}>
+                              <Typography variant="body1" sx={{ mb: 1, fontWeight: "bold" }}>
+                                🕸 Please upload screenshot to complete
+                              </Typography>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => setScreenshotFile(e.target.files[0])}
+                                style={{ marginBottom: "10px" }}
+                              />
+                              {uploading ? (
+                                <Box sx={{ width: "100%", mt: 1 }}>
+                                  <Typography variant="body2">Uploading... {Math.round(uploadProgress)}%</Typography>
+                                  <LinearProgress
+                                    variant="determinate"
+                                    value={uploadProgress}
+                                    sx={{ height: 8, borderRadius: 5, mt: 1 }}
+                                  />
+                                </Box>
+                              ) : (
+                                <Button
+                                  variant="contained"
+                                  color="primary"
+                                  onClick={handleUpload}
+                                  disabled={!screenshotFile}
+                                >
+                                  Upload Screenshot
                                 </Button>
                               )}
                             </Box>
-                          </Box>
-                        )}
-
-                        {isActive && status === "awaiting_screenshot" && (
-                          <Box sx={{ mt: 2, width: "100%" }}>
-                            <Typography variant="body1" sx={{ mb: 1, fontWeight: "bold" }}>
-                              🕸 Please upload screenshot to complete
-                            </Typography>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => setScreenshotFile(e.target.files[0])}
-                              style={{ marginBottom: "10px" }}
-                            />
-                            {uploading ? (
-                              <Box sx={{ width: "100%", mt: 1 }}>
-                                <Typography variant="body2">Uploading... {Math.round(uploadProgress)}%</Typography>
-                                <LinearProgress
-                                  variant="determinate"
-                                  value={uploadProgress}
-                                  sx={{ height: 8, borderRadius: 5, mt: 1 }}
-                                />
-                              </Box>
-                            ) : (
-                              <Button
-                                variant="contained"
-                                color="primary"
-                                onClick={handleUpload}
-                                disabled={!screenshotFile}
-                              >
-                                Upload Screenshot
-                              </Button>
-                            )}
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  </Tooltip>
                 );
               })}
             </Box>
@@ -625,6 +642,7 @@ const StartSession = () => {
       </Box>
     </Box>
   );
+  
 };
 
 export default StartSession;
