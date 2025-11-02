@@ -24,10 +24,10 @@ import {
   query,
   where,
   onSnapshot,
-  Timestamp,
   doc,
   updateDoc,
   deleteDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { useAuth } from "../../hooks/useAuth";
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -46,7 +46,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
 
-import bg from "../../assets/bg.gif"; // 🎃 Halloween background
+import bg from "../../assets/bg.gif"; // spooky background GIF
 
 const drawerWidth = 240;
 
@@ -74,39 +74,48 @@ const Dashboard = () => {
     setSidebarOpen(!isMobile);
   }, [isMobile]);
 
+  // Fetch sessions in real-time (keeps endTime handling from the newer logic)
   useEffect(() => {
     if (!currentUser?.uid) return;
+
     const q = query(
       collection(db, "sessions"),
       where("teacherId", "==", currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => {
-        const s = doc.data();
+      const data = snapshot.docs.map((docSnap) => {
+        const s = docSnap.data();
         const startTime =
-          s.startTime instanceof Timestamp
-            ? s.startTime.toDate()
-            : new Date(s.startTime);
+          s.startTime instanceof Timestamp ? s.startTime.toDate() : new Date(s.startTime);
+        const endTime =
+          s.endTime instanceof Timestamp ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
 
         return {
-          id: doc.id,
+          id: docSnap.id,
           startTime,
+          endTime,
           classType: s.classType || "N/A",
           rate: Number(s.rate) || 0,
           status: s.status || "pending",
+          // prefer actualEarnings if present, otherwise totalEarnings or rate
           totalEarnings:
             s.actualEarnings != null
               ? Number(s.actualEarnings)
-              : Number(s.totalEarnings) || Number(s.rate) || 0,
+              : s.totalEarnings != null
+              ? Number(s.totalEarnings)
+              : Number(s.rate) || 0,
           screenshotUrl: s.screenshotUrl || s.screenshotBase64 || null,
         };
       });
 
+      // Sort newest first
       data.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+
       setSessions(data);
       setLoadingSessions(false);
 
+      // Compute stats similar to earlier logic
       const today = new Date();
       const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -142,6 +151,7 @@ const Dashboard = () => {
       setMonthlyEarnings(monthTotal);
       setTodaysCompletedClasses(completedTodayCount);
 
+      // streak calculation
       let streakCount = 0;
       let checkDate = new Date();
       while (completedDates.has(checkDate.toDateString())) {
@@ -157,16 +167,18 @@ const Dashboard = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Delete session
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this class?")) return;
+    if (!window.confirm("Delete this session?")) return;
     try {
       await deleteDoc(doc(db, "sessions", id));
-      alert("Deleted successfully!");
+      alert("Session deleted!");
     } catch (err) {
-      console.error("Error deleting:", err);
+      console.error("Delete error:", err);
     }
   };
 
+  // Reupload screenshot
   const handleReupload = async (e, session) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -184,7 +196,9 @@ const Dashboard = () => {
         },
         async () => {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
-          await updateDoc(doc(db, "sessions", session.id), { screenshotUrl: url });
+          await updateDoc(doc(db, "sessions", session.id), {
+            screenshotUrl: url,
+          });
           setPreviewImage(url);
           setUploading(false);
           alert("Screenshot updated!");
@@ -196,6 +210,7 @@ const Dashboard = () => {
     }
   };
 
+  // Render status with spooky-themed glow (keeps the first theme's styling)
   const renderStatus = (status) => {
     switch (status) {
       case "ongoing":
@@ -224,12 +239,33 @@ const Dashboard = () => {
     }
   };
 
+  // DataGrid columns (combines nicer visuals from the first with fields from second)
   const columns = [
-    { field: "startTime", headerName: "Date", flex: 1, renderCell: (p) => p?.value ? new Date(p.value).toLocaleString() : "N/A" },
+    {
+      field: "startTime",
+      headerName: "Date",
+      flex: 1,
+      renderCell: (p) => (p?.value ? new Date(p.value).toLocaleString() : "N/A"),
+    },
     { field: "classType", headerName: "Class Type", flex: 1 },
-    { field: "rate", headerName: "Rate", flex: 0.7, renderCell: (p) => `₱${Number(p.value).toLocaleString()}` },
-    { field: "status", headerName: "Status", flex: 1, renderCell: (p) => renderStatus(p.value) },
-    { field: "totalEarnings", headerName: "Earnings", flex: 0.8, renderCell: (p) => `₱${Number(p.value).toLocaleString()}` },
+    {
+      field: "rate",
+      headerName: "Rate",
+      flex: 0.7,
+      renderCell: (p) => `₱${Number(p.value).toLocaleString()}`,
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      flex: 1,
+      renderCell: (p) => renderStatus(p.value),
+    },
+    {
+      field: "totalEarnings",
+      headerName: "Earnings",
+      flex: 0.8,
+      renderCell: (p) => `₱${Number(p.value).toLocaleString()}`,
+    },
     {
       field: "screenshotUrl",
       headerName: "Screenshot",
@@ -275,7 +311,7 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
-      {/* Background & Spooky Overlay */}
+      {/* Background & Spooky Overlay (keeps first file's visual styling) */}
       <Box
         sx={{
           position: "absolute",
@@ -337,7 +373,7 @@ const Dashboard = () => {
         />
 
         <Box sx={{ flexGrow: 1, overflowY: "auto", px: { xs: 2, sm: 3, md: 3 }, pt: "64px" }}>
-          {/* Header */}
+          {/* Header (spooky theme title preserved) */}
           <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ color: "#ff9800", textShadow: "0 0 12px #ff5722" }}>
             🎃 Spooky Teaching Insights
           </Typography>
@@ -345,7 +381,7 @@ const Dashboard = () => {
             Track your classes, boost productivity, and watch your earnings grow… if you dare!
           </Typography>
 
-          {/* Stats Cards */}
+          {/* Stats Cards (uses the richer styling from the first file) */}
           <Grid container spacing={2}>
             {[
               { label: "Today's Earnings", value: `₱${todaysEarnings.toLocaleString()}`, icon: <MonetizationOnIcon />, color: "#ff5722" },
@@ -444,7 +480,7 @@ const Dashboard = () => {
         </Box>
       </Box>
 
-      {/* Preview Dialog */}
+      {/* Preview Dialog (keeps richer layout from first file) */}
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="sm" fullWidth>
         <DialogContent sx={{ position: "relative", background: "#111", color: "#fff", boxShadow: "0 0 20px #ff5722" }}>
           <IconButton onClick={() => setPreviewOpen(false)} sx={{ position: "absolute", right: 8, top: 8, color: "#fff" }}>
@@ -461,10 +497,10 @@ const Dashboard = () => {
             <Box sx={{ mt: 2 }}>
               <Typography><strong>Date:</strong> {new Date(selectedSession.startTime).toLocaleString()}</Typography>
               <Typography><strong>Class Type:</strong> {selectedSession.classType}</Typography>
-              <Typography><strong>Rate:</strong> ₱{selectedSession.rate.toLocaleString()}</Typography>
-              <Typography><strong>Earnings:</strong> ₱{selectedSession.totalEarnings.toLocaleString()}</Typography>
+              <Typography><strong>Rate:</strong> ₱{Number(selectedSession.rate).toLocaleString()}</Typography>
+              <Typography><strong>Earnings:</strong> ₱{Number(selectedSession.totalEarnings).toLocaleString()}</Typography>
               <Typography><strong>Status:</strong> {selectedSession.status}</Typography>
-              <Typography variant="subtitle2" color="text.secondary">
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
                 Reupload Screenshot:
               </Typography>
               <Button variant="contained" component="label" sx={{ mt: 1 }}>
