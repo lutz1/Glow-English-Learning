@@ -73,14 +73,14 @@ const CLASS_SETTINGS = {
       "Absences are still paid as long as you stay in the class for the full 25 minutes.\n\nIn case of emergency, please inform the parents in the GC.\n\nSalary: Every 1st and 16th of the month.",
   },
   "Vietnamese Class": {
-    rate: 75, // changed to ₱75
-    duration: 25, // changed to 25 minutes
-    icon: <Language fontSize="large" sx={{ color: "#fff" }} />,
-    gradient: "linear-gradient(135deg, #66bb6a, #388e3c)",
-    custom: true,
-    tooltip:
-      "Absent with permission: Not paid\n\nAbsent without permission: Half paid\n\nIn case of emergency, please inform the parents in the GC and Ma’am Thanh.\n\nSalary: Every 1st and 16th of the month.",
-  },
+  rate: 75, // ₱75 per session
+  duration: 30, // Updated: duration is now 30 minutes
+  icon: <Language fontSize="large" sx={{ color: "#fff" }} />,
+  gradient: "linear-gradient(135deg, #66bb6a, #388e3c)",
+  custom: true,
+  tooltip:
+    "Absent with permission: Not paid\n\nAbsent without permission: Half paid\n\nIn case of emergency, please inform the parents in the GC and Ma’am Thanh.\n\nSalary: Every 1st and 16th of the month.",
+},
   IELTS: {
     rate: 250,
     duration: 60,
@@ -597,15 +597,23 @@ const StartSession = () => {
                   </Select>
                 </FormControl>
                 <FormControl fullWidth>
-                  <InputLabel>Minutes</InputLabel>
-                  <Select value={selectedMinutes} onChange={(e) => setSelectedMinutes(e.target.value)}>
-                    {[...Array(13).keys()].map((m) => (
-                      <MenuItem key={m * 5} value={m * 5}>
-                        {m * 5}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+  <InputLabel>Minutes</InputLabel>
+  <Select
+    value={selectedMinutes}
+    onChange={(e) => setSelectedMinutes(Number(e.target.value))}
+  >
+    {/* Updated: allow 0 minutes for exact hours, and all minutes from 0 to 59 */}
+    {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+      <MenuItem
+        key={m}
+        value={m}
+        disabled={selectedHours === 0 && m < (CLASS_SETTINGS[classType]?.duration || 0)} // enforce minimum duration
+      >
+        {m}
+      </MenuItem>
+    ))}
+  </Select>
+</FormControl>
               </Box>
               <Typography sx={{ mt: 2, fontSize: 13, color: "text.secondary" }}>
                 Minimum: {CLASS_SETTINGS[classType]?.duration || 0} minutes
