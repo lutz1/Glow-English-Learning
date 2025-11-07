@@ -21,7 +21,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { motion } from "framer-motion";
-import { Groups, Language, EmojiEvents, Person, Translate, Close, InfoOutlined } from "@mui/icons-material";
+import { Groups, Language, EmojiEvents, Person, Translate, Close } from "@mui/icons-material";
 
 import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
@@ -41,7 +41,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
 import { useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import bg from "../../assets/bg.gif"; // spooky Halloween background
+import bg from "../../assets/bg.gif";
 
 const CLASS_SETTINGS = {
   "Private Class": {
@@ -50,7 +50,6 @@ const CLASS_SETTINGS = {
     icon: <Person fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #42a5f5, #1e88e5)",
     custom: true,
-    // tooltip content added
     tooltip:
       "Absences are not paid.\n\nIn case of emergency, please inform Miss Grace directly.\n\nSalary: Every 16th of the month.",
   },
@@ -73,14 +72,14 @@ const CLASS_SETTINGS = {
       "Absences are still paid as long as you stay in the class for the full 25 minutes.\n\nIn case of emergency, please inform the parents in the GC.\n\nSalary: Every 1st and 16th of the month.",
   },
   "Vietnamese Class": {
-  rate: 75, // ₱75 per session
-  duration: 30, // Updated: duration is now 30 minutes
-  icon: <Language fontSize="large" sx={{ color: "#fff" }} />,
-  gradient: "linear-gradient(135deg, #66bb6a, #388e3c)",
-  custom: true,
-  tooltip:
-    "Absent with permission: Not paid\n\nAbsent without permission: Half paid\n\nIn case of emergency, please inform the parents in the GC and Ma’am Thanh.\n\nSalary: Every 1st and 16th of the month.",
-},
+    rate: 75,
+    duration: 30,
+    icon: <Language fontSize="large" sx={{ color: "#fff" }} />,
+    gradient: "linear-gradient(135deg, #66bb6a, #388e3c)",
+    custom: true,
+    tooltip:
+      "Absent with permission: Not paid\n\nAbsent without permission: Half paid\n\nIn case of emergency, please inform the parents in the GC and Ma’am Thanh.\n\nSalary: Every 1st and 16th of the month.",
+  },
   IELTS: {
     rate: 250,
     duration: 60,
@@ -133,7 +132,7 @@ const StartSession = () => {
         const data = docData.data();
         setSessionId(docData.id);
         setClassType(data.classType);
-        setTargetSeconds(data.durationSeconds);
+        setTargetSeconds(data.durationSeconds); // use saved duration
         startTsRef.current = data.startTime?.toDate().getTime();
         setElapsedSeconds(Math.floor((Date.now() - startTsRef.current) / 1000));
         setStatus(data.status);
@@ -151,15 +150,18 @@ const StartSession = () => {
         const secs = Math.floor((Date.now() - startTsRef.current) / 1000);
         setElapsedSeconds(secs);
 
+        // ✅ Stop exactly at the targetSeconds
         if (targetSeconds > 0 && secs >= targetSeconds) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
           setRunning(false);
           setStatus("awaiting_screenshot");
+
           if (sessionId) {
             updateDoc(doc(db, "sessions", sessionId), {
               status: "awaiting_screenshot",
               endTime: serverTimestamp(),
+              actualDuration: targetSeconds, // save the exact session duration
             });
           }
         }
@@ -216,7 +218,7 @@ const StartSession = () => {
     const totalMinutes = classConfig.duration;
     const totalEarnings = classConfig.rate;
 
-    setTargetSeconds(totalMinutes * 60);
+    setTargetSeconds(totalMinutes * 60); // stop timer at default duration
     setElapsedSeconds(0);
     startTsRef.current = Date.now();
     setRunning(true);
@@ -235,6 +237,7 @@ const StartSession = () => {
     setConfirmDialog(false);
   };
 
+  // ✅ Updated confirmStart to respect user-selected duration
   const confirmStart = async () => {
     if (!currentUser) return;
     const q = query(
@@ -257,7 +260,7 @@ const StartSession = () => {
     const perMinuteRate = classConfig.rate / classConfig.duration;
     const totalEarnings = perMinuteRate * totalMinutes;
 
-    setTargetSeconds(totalMinutes * 60);
+    setTargetSeconds(totalMinutes * 60); // ✅ stop timer at user-set duration
     setElapsedSeconds(0);
     startTsRef.current = Date.now();
     setRunning(true);
