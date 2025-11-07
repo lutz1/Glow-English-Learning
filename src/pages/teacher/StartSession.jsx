@@ -597,23 +597,23 @@ const StartSession = () => {
                   </Select>
                 </FormControl>
                 <FormControl fullWidth>
-  <InputLabel>Minutes</InputLabel>
-  <Select
-    value={selectedMinutes}
-    onChange={(e) => setSelectedMinutes(Number(e.target.value))}
-  >
-    {/* Updated: allow 0 minutes for exact hours, and all minutes from 0 to 59 */}
-    {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-      <MenuItem
-        key={m}
-        value={m}
-        disabled={selectedHours === 0 && m < (CLASS_SETTINGS[classType]?.duration || 0)} // enforce minimum duration
-      >
-        {m}
-      </MenuItem>
-    ))}
-  </Select>
-</FormControl>
+                <InputLabel>Minutes</InputLabel>
+                <Select
+                  value={selectedMinutes}
+                  onChange={(e) => setSelectedMinutes(Number(e.target.value))}
+                >
+                  {/* Updated: allow 0 minutes for exact hours, and all minutes from 0 to 59 */}
+                  {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                    <MenuItem
+                      key={m}
+                      value={m}
+                      disabled={selectedHours === 0 && m < (CLASS_SETTINGS[classType]?.duration || 0)} // enforce minimum duration
+                    >
+                      {m}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               </Box>
               <Typography sx={{ mt: 2, fontSize: 13, color: "text.secondary" }}>
                 Minimum: {CLASS_SETTINGS[classType]?.duration || 0} minutes
