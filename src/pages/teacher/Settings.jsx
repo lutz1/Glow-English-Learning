@@ -24,7 +24,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { useTheme } from "@mui/material/styles";
 import { useMediaQuery } from "@mui/material";
-import bg from "../../assets/bg.gif"; // spooky Halloween background
+import bg from "../../assets/christmas.gif";
 
 const drawerWidth = 240;
 
@@ -86,33 +86,21 @@ const Settings = () => {
           zIndex: -3,
         }}
       />
-      <Box
-        sx={{
-          position: "absolute",
-          width: "200%",
-          height: "200%",
-          background: "radial-gradient(rgba(0,0,0,0.25), transparent 70%)",
-          animation: "smoke 80s linear infinite",
-          zIndex: -2,
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          width: "100%",
-          height: "100%",
-          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.85))",
-          zIndex: -1,
-        }}
-      />
-      <style>{`
-        @keyframes smoke {
-          0% { transform: translate(0,0) rotate(0deg); }
-          50% { transform: translate(-20%, -20%) rotate(180deg); }
-          100% { transform: translate(0,0) rotate(360deg); }
-        }
-      `}</style>
-
+      {/* Frosted overlay */}
+                  <Box
+                    sx={{
+                      position: "fixed",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: "100%",
+                      backgroundColor: "rgba(255,255,255,0.05)",
+                      backdropFilter: "blur(4px)",
+                      WebkitBackdropFilter: "blur(4px)",
+                      zIndex: -1,
+                    }}
+                  />
+      
       {/* Sidebar */}
       <TeacherSidebar
         open={sidebarOpen}
@@ -122,129 +110,156 @@ const Settings = () => {
 
       {/* Main Content */}
       <Box
-        component="main"
+  component="main"
+  sx={{
+    flexGrow: 1,
+    width: { md: `calc(100% - ${sidebarOpen && !isMobile ? drawerWidth : 60}px)` },
+    minHeight: "100vh",
+    transition: "width 0.3s",
+    color: "#fff",
+    background: "linear-gradient(to bottom, #1b2a3b, #0b1a2b)", // subtle night sky
+    backgroundImage: "url('/assets/snowflakes.png')", // optional snowflake overlay if you have a pattern
+    backgroundSize: "cover",
+  }}
+>
+  {/* Topbar */}
+  <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+
+  {/* Content */}
+  <Box
+    sx={{
+      p: 3,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "flex-start",
+      pt: { xs: 8, sm: 10 },
+    }}
+  >
+    <Paper
+      elevation={6}
+      sx={{
+        p: { xs: 3, sm: 5 },
+        width: "100%",
+        maxWidth: 500,
+        borderRadius: 4,
+        textAlign: "center",
+        background: "rgba(0, 0, 0, 0.37)",
+        backdropFilter: "blur(12px)",
+        border: "1px solid rgba(255,255,255,0.15)",
+      }}
+    >
+      <LockIcon
         sx={{
-          flexGrow: 1,
-          width: { md: `calc(100% - ${sidebarOpen && !isMobile ? drawerWidth : 60}px)` },
-          minHeight: "100vh",
-          transition: "width 0.3s",
-          color: "#fff",
+          fontSize: 40,
+          color: "#b71c1c",
+          mb: 1,
         }}
+      />
+      <Typography
+        variant="h5"
+        fontWeight="bold"
+        gutterBottom
+        sx={{ color: "#ffeb3b", }}
       >
-        {/* Topbar */}
-        <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        🎄 Change Password
+      </Typography>
+      <Typography variant="body2" sx={{ mb: 3, color: "#ffcc00" }}>
+        Keep your account safe this festive season.
+      </Typography>
 
-        {/* Content */}
-        <Box
-          sx={{
-            p: 3,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-start",
-            pt: { xs: 8, sm: 10 },
-          }}
-        >
-          <Paper
-            elevation={6}
-            sx={{
-              p: { xs: 3, sm: 5 },
-              width: "100%",
-              maxWidth: 500,
-              borderRadius: 4,
-              textAlign: "center",
-              background: "rgba(0,0,0,0.7)",
-              backdropFilter: "blur(10px)",
-              boxShadow: "0 8px 32px rgba(255,87,34,0.5)",
-            }}
-          >
-            <LockIcon sx={{ fontSize: 40, color: "#ff5722", mb: 1, textShadow: "0 0 8px #ff9800" }} />
-            <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ color: "#ffcc00" }}>
-              Change Password
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 3, color: "#ffa500" }}>
-              Update your account password securely.
-            </Typography>
+      <TextField
+        label="Current Password"
+        type={showPassword ? "text" : "password"}
+        name="currentPassword"
+        value={formData.currentPassword}
+        onChange={handleChange}
+        fullWidth
+        margin="normal"
+        sx={{
+          bgcolor: "rgba(255,255,255,0.1)",
+          borderRadius: 2,
+          input: { color: "#fff" },
+          "&:hover": { bgcolor: "rgba(255,255,255,0.15)" },
+        }}
+        InputLabelProps={{ sx: { color: "#ffeb3b" } }}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: "#ffeb3b" }}>
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
 
-            <TextField
-              label="Current Password"
-              type={showPassword ? "text" : "password"}
-              name="currentPassword"
-              value={formData.currentPassword}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ bgcolor: "rgba(255,255,255,0.1)", borderRadius: 2, input: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: "#ffcc00" }}>
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
+      <TextField
+        label="New Password"
+        type={showPassword ? "text" : "password"}
+        name="newPassword"
+        value={formData.newPassword}
+        onChange={handleChange}
+        fullWidth
+        margin="normal"
+        sx={{
+          bgcolor: "rgba(255,255,255,0.1)",
+          borderRadius: 2,
+          input: { color: "#fff" },
+        }}
+        InputLabelProps={{ sx: { color: "#ffeb3b" } }}
+      />
 
-            <TextField
-              label="New Password"
-              type={showPassword ? "text" : "password"}
-              name="newPassword"
-              value={formData.newPassword}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ bgcolor: "rgba(255,255,255,0.1)", borderRadius: 2, input: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
-            />
+      <TextField
+        label="Confirm Password"
+        type={showPassword ? "text" : "password"}
+        name="confirmPassword"
+        value={formData.confirmPassword}
+        onChange={handleChange}
+        fullWidth
+        margin="normal"
+        sx={{
+          bgcolor: "rgba(255,255,255,0.1)",
+          borderRadius: 2,
+          input: { color: "#fff" },
+        }}
+        InputLabelProps={{ sx: { color: "#ffeb3b" } }}
+      />
 
-            <TextField
-              label="Confirm Password"
-              type={showPassword ? "text" : "password"}
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              sx={{ bgcolor: "rgba(255,255,255,0.1)", borderRadius: 2, input: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
-            />
+      <Button
+        variant="contained"
+        sx={{
+          mt: 3,
+          bgcolor: "#b71c1c",
+          color: "#fff",
+          fontWeight: "bold",
+          borderRadius: 3,
+          "&:hover": { bgcolor: "#ff9800"},
+        }}
+        onClick={handlePasswordChange}
+        disabled={loading}
+        fullWidth
+      >
+        {loading ? "Updating..." : "Update Password"}
+      </Button>
+    </Paper>
+  </Box>
 
-            <Button
-              variant="contained"
-              sx={{
-                mt: 3,
-                bgcolor: "#ff5722",
-                color: "#fff",
-                fontWeight: "bold",
-                borderRadius: 3,
-                "&:hover": { bgcolor: "#ff9800" },
-              }}
-              onClick={handlePasswordChange}
-              disabled={loading}
-              fullWidth
-            >
-              {loading ? "Updating..." : "Update Password"}
-            </Button>
-          </Paper>
-        </Box>
-
-        {/* Snackbar */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={4000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        >
-          <Alert
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
-            severity={snackbar.severity}
-            sx={{ width: "100%" }}
-          >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Box>
+  {/* Snackbar */}
+  <Snackbar
+    open={snackbar.open}
+    autoHideDuration={4000}
+    onClose={() => setSnackbar({ ...snackbar, open: false })}
+    anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+  >
+    <Alert
+      onClose={() => setSnackbar({ ...snackbar, open: false })}
+      severity={snackbar.severity}
+      sx={{ width: "100%" }}
+    >
+      {snackbar.message}
+    </Alert>
+  </Snackbar>
+</Box>
     </Box>
   );
 };

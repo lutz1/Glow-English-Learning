@@ -42,11 +42,9 @@ import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WhatshotIcon from "@mui/icons-material/Whatshot";
 import DeleteIcon from "@mui/icons-material/Delete";
-
+import bg from "../../assets/christmas.gif"; 
 import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
-
-import bg from "../../assets/bg.gif"; // spooky background GIF
 
 const drawerWidth = 240;
 
@@ -74,7 +72,7 @@ const Dashboard = () => {
     setSidebarOpen(!isMobile);
   }, [isMobile]);
 
-  // Fetch sessions in real-time (keeps endTime handling from the newer logic)
+  // Fetch sessions
   useEffect(() => {
     if (!currentUser?.uid) return;
 
@@ -98,7 +96,6 @@ const Dashboard = () => {
           classType: s.classType || "N/A",
           rate: Number(s.rate) || 0,
           status: s.status || "pending",
-          // prefer actualEarnings if present, otherwise totalEarnings or rate
           totalEarnings:
             s.actualEarnings != null
               ? Number(s.actualEarnings)
@@ -109,13 +106,11 @@ const Dashboard = () => {
         };
       });
 
-      // Sort newest first
       data.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
-
       setSessions(data);
       setLoadingSessions(false);
 
-      // Compute stats similar to earlier logic
+      // Compute stats
       const today = new Date();
       const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -151,7 +146,7 @@ const Dashboard = () => {
       setMonthlyEarnings(monthTotal);
       setTodaysCompletedClasses(completedTodayCount);
 
-      // streak calculation
+      // streak
       let streakCount = 0;
       let checkDate = new Date();
       while (completedDates.has(checkDate.toDateString())) {
@@ -210,26 +205,25 @@ const Dashboard = () => {
     }
   };
 
-  // Render status with spooky-themed glow (keeps the first theme's styling)
   const renderStatus = (status) => {
     switch (status) {
       case "ongoing":
         return (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#ffa726", textShadow: "0 0 6px #ff9800" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#ffa726" }}>
             <FiberManualRecordIcon sx={{ fontSize: 14 }} />
             <PlayCircleOutlineIcon sx={{ fontSize: 18 }} /> Ongoing
           </Box>
         );
       case "pending":
         return (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#ccc", textShadow: "0 0 3px #999" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#ccc" }}>
             <FiberManualRecordIcon sx={{ fontSize: 14 }} />
             <HourglassEmptyIcon sx={{ fontSize: 18 }} /> Awaiting
           </Box>
         );
       case "completed":
         return (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#4caf50", textShadow: "0 0 6px #4caf50" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: "#4caf50" }}>
             <FiberManualRecordIcon sx={{ fontSize: 14 }} />
             <DoneAllIcon sx={{ fontSize: 18 }} /> Completed
           </Box>
@@ -239,33 +233,12 @@ const Dashboard = () => {
     }
   };
 
-  // DataGrid columns (combines nicer visuals from the first with fields from second)
   const columns = [
-    {
-      field: "startTime",
-      headerName: "Date",
-      flex: 1,
-      renderCell: (p) => (p?.value ? new Date(p.value).toLocaleString() : "N/A"),
-    },
+    { field: "startTime", headerName: "Date", flex: 1, renderCell: (p) => (p?.value ? new Date(p.value).toLocaleString() : "N/A") },
     { field: "classType", headerName: "Class Type", flex: 1 },
-    {
-      field: "rate",
-      headerName: "Rate",
-      flex: 0.7,
-      renderCell: (p) => `₱${Number(p.value).toLocaleString()}`,
-    },
-    {
-      field: "status",
-      headerName: "Status",
-      flex: 1,
-      renderCell: (p) => renderStatus(p.value),
-    },
-    {
-      field: "totalEarnings",
-      headerName: "Earnings",
-      flex: 0.8,
-      renderCell: (p) => `₱${Number(p.value).toLocaleString()}`,
-    },
+    { field: "rate", headerName: "Rate", flex: 0.7, renderCell: (p) => `₱${Number(p.value).toLocaleString()}` },
+    { field: "status", headerName: "Status", flex: 1, renderCell: (p) => renderStatus(p.value) },
+    { field: "totalEarnings", headerName: "Earnings", flex: 0.8, renderCell: (p) => `₱${Number(p.value).toLocaleString()}` },
     {
       field: "screenshotUrl",
       headerName: "Screenshot",
@@ -283,10 +256,6 @@ const Dashboard = () => {
                 borderRadius: "50%",
                 objectFit: "cover",
                 cursor: "pointer",
-                border: "2px solid #ff9800",
-                boxShadow: "0 0 10px #ff9800, 0 0 20px #ff5722",
-                transition: "all 0.3s",
-                "&:hover": { transform: "scale(1.1)" }
               }}
               onClick={() => {
                 setPreviewImage(params.value);
@@ -297,198 +266,159 @@ const Dashboard = () => {
           </Tooltip>
         ) : "—",
     },
-    {
-      field: "delete",
-      headerName: "Delete",
-      flex: 0.4,
-      renderCell: (params) => (
-        <IconButton color="error" onClick={() => handleDelete(params.row.id)}>
-          <DeleteIcon />
-        </IconButton>
-      ),
-    },
+    { field: "delete", headerName: "Delete", flex: 0.4, renderCell: (params) => <IconButton color="error" onClick={() => handleDelete(params.row.id)}><DeleteIcon /></IconButton> },
   ];
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
-      {/* Background & Spooky Overlay (keeps first file's visual styling) */}
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+      {/* Background GIF */}
       <Box
         sx={{
-          position: "absolute",
+          position: "fixed",
           top: 0,
           left: 0,
           width: "100%",
           height: "100%",
           background: `url(${bg}) center/cover no-repeat`,
-          zIndex: -3,
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          width: "200%",
-          height: "200%",
-          background: "radial-gradient(rgba(0,0,0,0.25), transparent 70%)",
-          animation: "smoke 80s linear infinite",
           zIndex: -2,
         }}
       />
+      {/* Frosted overlay */}
       <Box
         sx={{
-          position: "absolute",
+          position: "fixed",
+          top: 0,
+          left: 0,
           width: "100%",
           height: "100%",
-          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8))",
+          backgroundColor: "rgba(255,255,255,0.05)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
           zIndex: -1,
         }}
       />
-      <style>{`
-        @keyframes smoke {
-          0% { transform: translate(0,0) rotate(0deg); }
-          50% { transform: translate(-20%, -20%) rotate(180deg); }
-          100% { transform: translate(0,0) rotate(360deg); }
-        }
-      `}</style>
 
-      {/* Sidebar */}
-      <TeacherSidebar
-        open={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-      />
+      <TeacherSidebar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
 
-      {/* Main Content */}
       <Box
         component="main"
-        sx={{
-          flexGrow: 1,
-          width: { md: `calc(100% - ${sidebarOpen ? drawerWidth : 60}px)` },
-          transition: "width 0.3s",
-          minHeight: "100vh",
-          color: "#fff",
-        }}
+        sx={{ flexGrow: 1, width: { md: `calc(100% - ${sidebarOpen ? drawerWidth : 60}px)` }, transition: "width 0.3s", minHeight: "100vh" }}
       >
-        <TeacherTopbar
-          open={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
+
+        <Box sx={{ flexGrow: 1,mt: 2, overflowY: "auto", px: { xs: 2, sm: 3, md: 3 }, pt: "64px" }}>
+  <Typography
+    variant="h4"
+    fontWeight="bold"
+    gutterBottom
+    sx={{
+      color: "#fff",
+      fontFamily: "'Festive', sans-serif",
+    }}
+  >
+    🎄✨ Merry Teaching Dashboard ✨🎄
+  </Typography>
+
+  <Grid container spacing={2}>
+    {[
+      { label: "Today's Earnings", value: `₱${todaysEarnings.toLocaleString()}`, icon: <MonetizationOnIcon sx={{ color: "#ffeb3b"}} /> },
+      { label: "Monthly Earnings", value: `₱${monthlyEarnings.toLocaleString()}`, icon: <CalendarTodayIcon sx={{ color: "#4caf50"}} /> },
+      { label: "Classes Today", value: todaysCompletedClasses, icon: <CheckCircleIcon sx={{ color: "#ff5252"}} /> },
+      { label: "Daily Streak", value: `${streak} days`, icon: <WhatshotIcon sx={{ color: "#ff9800" }} /> },
+    ].map((stat, idx) => (
+      <Grid item xs={12} sm={6} md={3} key={idx}>
+        <Card sx={{
+          borderLeft: `6px solid #ff5252`,
+          background: "rgba(136, 134, 134, 0.44)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          color: "#fff",
+          transform: "scale(1)",
+          transition: "transform 0.2s ease",
+          "&:hover": {
+            transform: "scale(1.03)",
+          }
+        }}>
+          <CardContent>
+            <Typography variant="subtitle2" sx={{ letterSpacing: 1 }}>{stat.label}</Typography>
+            <Typography variant="h5" fontWeight="bold" sx={{ color: "#fff"}}>{stat.value}</Typography>
+            {stat.icon}
+          </CardContent>
+        </Card>
+      </Grid>
+    ))}
+  </Grid>
+
+  <Paper sx={{
+    mt: 4,
+    p: 3,
+    borderRadius: 3,
+    background: "rgba(136, 134, 134, 0.44)",
+    backdropFilter: "blur(14px)",
+    WebkitBackdropFilter: "blur(14px)",
+    color: "#fff",
+  }}>
+    <Typography variant="h6" fontWeight="bold" gutterBottom>
+      🎁 Weekly Goal Progress
+    </Typography>
+    <LinearProgress variant="determinate" value={weeklyProgress} sx={{ height: 12, borderRadius: 6, mb: 1, backgroundColor: "rgba(255,255,255,0.2)" }} />
+    <Typography variant="body2">{weeklyProgress.toFixed(0)}% of your 20-class goal</Typography>
+  </Paper>
+
+  <Box sx={{ mt: 4, overflowX: "auto" }}>
+    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ color: "#fff" }}>
+      ❄️ Your Sessions
+    </Typography>
+    {loadingSessions ? (
+      <CircularProgress sx={{ color: "#0a0a0aff" }} />
+    ) : (
+      <Box sx={{ height: 500, borderRadius: 2, overflow: "hidden" }}>
+        <DataGrid
+          rows={sessions}
+          columns={columns}
+          disableSelectionOnClick
+          sx={{background: "rgba(255,255,255,0.1)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          border: "none",
+          color: "#0a0a0aff",
+            ".MuiDataGrid-cell": {
+              backdropFilter: "blur(14px)",
+              background: "rgba(255,255,255,0.05)",
+              color: "#0a0a0aff",
+            },
+            ".MuiDataGrid-columnHeaders": {
+              background: "rgba(255,255,255,0.1)",
+              color: "#0a0a0aff",
+              backdropFilter: "blur(14px)",
+            },
+            ".MuiDataGrid-footerContainer": {
+              background: "rgba(255,255,255,0.1)",
+              color: "#0a0a0aff",
+              backdropFilter: "blur(14px)",
+            },
+          }}
         />
-
-        <Box sx={{ flexGrow: 1, overflowY: "auto", px: { xs: 2, sm: 3, md: 3 }, pt: "64px" }}>
-          {/* Header (spooky theme title preserved) */}
-          <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ color: "#ff9800", textShadow: "0 0 12px #ff5722" }}>
-            🎃 Spooky Teaching Insights
-          </Typography>
-          <Typography variant="subtitle1" sx={{ mb: 2, color: "#f5f5f5", textShadow: "0 0 4px #ff9800" }}>
-            Track your classes, boost productivity, and watch your earnings grow… if you dare!
-          </Typography>
-
-          {/* Stats Cards (uses the richer styling from the first file) */}
-          <Grid container spacing={2}>
-            {[
-              { label: "Today's Earnings", value: `₱${todaysEarnings.toLocaleString()}`, icon: <MonetizationOnIcon />, color: "#ff5722" },
-              { label: "Monthly Earnings", value: `₱${monthlyEarnings.toLocaleString()}`, icon: <CalendarTodayIcon />, color: "#ffeb3b" },
-              { label: "Classes Today", value: todaysCompletedClasses, icon: <CheckCircleIcon />, color: "#4caf50" },
-              { label: "Daily Streak", value: `${streak} days`, icon: <WhatshotIcon />, color: "#f44336" },
-            ].map((stat, idx) => (
-              <Grid item xs={12} sm={6} md={3} key={idx}>
-                <Card sx={{
-                  borderLeft: `6px solid ${stat.color}`,
-                  background: "rgba(0,0,0,0.65)",
-                  color: "#fff",
-                  boxShadow: `0 0 15px ${stat.color}, 0 0 30px rgba(255,255,255,0.1)`,
-                  transition: "0.3s",
-                  "&:hover": { transform: "scale(1.03)", boxShadow: `0 0 25px ${stat.color}, 0 0 50px rgba(255,255,255,0.2)` }
-                }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" sx={{ color: stat.color }}>{stat.label}</Typography>
-                    <Typography variant="h5" fontWeight="bold">{stat.value}</Typography>
-                    {stat.icon}
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-
-          {/* Weekly Progress */}
-          <Paper sx={{ mt: 4, p: 3, borderRadius: 3, background: "rgba(0,0,0,0.65)", color: "#fff", boxShadow: "0 0 20px #ff9800" }}>
-            <Typography variant="h6" fontWeight="bold" gutterBottom>
-              Weekly Goal Progress
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={weeklyProgress}
-              sx={{ height: 12, borderRadius: 6, mb: 1, backgroundColor: "#222", "& .MuiLinearProgress-bar": { backgroundColor: "#ff5722" } }}
-            />
-            <Typography variant="body2">
-              {weeklyProgress.toFixed(0)}% of your 20-class goal
-            </Typography>
-          </Paper>
-
-          {/* Sessions Table */}
-          <Box sx={{ mt: 4, overflowX: "auto" }}>
-            <Typography
-              variant="h6"
-              fontWeight="bold"
-              gutterBottom
-              sx={{ color: "#ff9800", textShadow: "0 0 10px #ff5722" }}
-            >
-              Your Sessions
-            </Typography>
-            {loadingSessions ? (
-              <CircularProgress sx={{ color: "#fff" }} />
-            ) : (
-              <Box sx={{ height: 500, borderRadius: 2, overflow: "hidden" }}>
-                <DataGrid
-                  rows={sessions}
-                  columns={columns}
-                  disableSelectionOnClick
-                  sx={{
-                    border: "none",
-                    color: "#fff",
-                    background: "transparent",
-                    "& .MuiDataGrid-columnHeaders": {
-                      background: "transparent",
-                      color: "#ff9800",
-                      textShadow: "0 0 6px #ff5722",
-                      borderBottom: "1px solid rgba(255,152,0,0.3)",
-                    },
-                    "& .MuiDataGrid-row": {
-                      background: "rgba(0,0,0,0.25)",
-                      transition: "all 0.3s",
-                      "&:hover": {
-                        background: "rgba(255,152,0,0.1)",
-                        boxShadow: "0 0 15px #ff5722",
-                      },
-                    },
-                    "& .MuiDataGrid-cell": {
-                      borderBottom: "1px solid rgba(255,152,0,0.2)",
-                    },
-                    "& .MuiDataGrid-footerContainer": {
-                      background: "rgba(0,0,0,0.3)",
-                      borderTop: "1px solid rgba(255,152,0,0.5)",
-                    },
-                    cursor: "pointer",
-                  }}
-                  onRowClick={(params) => {
-                    setSelectedSession(params.row);
-                    setPreviewImage(params.row.screenshotUrl || null);
-                    setPreviewOpen(true);
-                  }}
-                />
-              </Box>
-            )}
-          </Box>
-        </Box>
+      </Box>
+    )}
+  </Box>
+</Box>
       </Box>
 
-      {/* Preview Dialog (keeps richer layout from first file) */}
       <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="sm" fullWidth>
-        <DialogContent sx={{ position: "relative", background: "#111", color: "#fff", boxShadow: "0 0 20px #ff5722" }}>
+        <DialogContent sx={{
+          position: "relative",
+          background: "rgba(255,255,255,0.08)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          color: "#fff",
+        }}>
           <IconButton onClick={() => setPreviewOpen(false)} sx={{ position: "absolute", right: 8, top: 8, color: "#fff" }}>
             <CloseIcon />
           </IconButton>
 
           {previewImage ? (
-            <Box component="img" src={previewImage} alt="Screenshot Preview" sx={{ width: "100%", borderRadius: 2, boxShadow: "0 0 15px #ff5722" }} />
+            <Box component="img" src={previewImage} alt="Screenshot Preview" sx={{ width: "100%", borderRadius: 2 }} />
           ) : (
             <Typography>No screenshot available</Typography>
           )}
@@ -500,9 +430,7 @@ const Dashboard = () => {
               <Typography><strong>Rate:</strong> ₱{Number(selectedSession.rate).toLocaleString()}</Typography>
               <Typography><strong>Earnings:</strong> ₱{Number(selectedSession.totalEarnings).toLocaleString()}</Typography>
               <Typography><strong>Status:</strong> {selectedSession.status}</Typography>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
-                Reupload Screenshot:
-              </Typography>
+              <Typography variant="subtitle2" sx={{ mt: 1 }}>Reupload Screenshot:</Typography>
               <Button variant="contained" component="label" sx={{ mt: 1 }}>
                 Upload New
                 <input type="file" hidden accept="image/*" onChange={(e) => handleReupload(e, selectedSession)} />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react"; 
 import {
   AppBar,
   Toolbar,
@@ -9,19 +9,18 @@ import {
   Backdrop,
   Slide,
   List,
-  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   Tooltip,
   useMediaQuery,
+  Divider,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@mui/material/styles";
 import { useAuth } from "../hooks/useAuth";
 import { db } from "../firebase";
 import { doc, onSnapshot } from "firebase/firestore";
-import pumpkinIcon from "../assets/pumpkin.png";
 import {
   Logout as LogoutIcon,
   Email as EmailIcon,
@@ -58,6 +57,7 @@ const TeacherTopbar = ({ open }) => {
     setDrawerOpen(true);
     setTimeout(() => setSlideIn(true), 50);
   };
+
   const closeDrawer = () => {
     setSlideIn(false);
     setTimeout(() => setDrawerOpen(false), 300);
@@ -72,9 +72,29 @@ const TeacherTopbar = ({ open }) => {
     }
   };
 
-  const EXPANDED_WIDTH = 260;
-  const COLLAPSED_WIDTH = 80;
+  const EXPANDED_WIDTH = 240;
+  const COLLAPSED_WIDTH = 70;
   const sidebarWidth = open ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
+
+  // Ambient glow
+  const AmbientGlow = (
+    <Box
+      sx={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        background: open
+          ? "radial-gradient(circle at top, rgba(255,0,0,0.28), transparent 70%), radial-gradient(circle at bottom, rgba(0,180,0,0.25), transparent 70%)"
+          : "transparent",
+        mixBlendMode: "soft-light",
+        transition: "all 0.6s ease",
+        zIndex: 0,
+      }}
+    />
+  );
 
   return (
     <>
@@ -83,41 +103,51 @@ const TeacherTopbar = ({ open }) => {
         position={isMobile && open ? "relative" : "fixed"}
         elevation={0}
         sx={{
-          width: { xs: "100%", md: `calc(101.5% - ${sidebarWidth}px)` },
+          width: { xs: "100%", md: `calc(100% - ${sidebarWidth}px)` },
           ml: { xs: 0, md: `${sidebarWidth}px` },
-          background: "rgba(0,0,0,0.35)",
+          background: "rgba(255, 255, 255, 0.57)",
           backdropFilter: "blur(15px)",
-          boxShadow: "0px 0 20px #ff6f00 inset",
+          boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
           transition: "all 0.3s ease",
           zIndex: isMobile && open ? 998 : 1201,
         }}
       >
         <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: "bold",
-              color: "#ff6f00",
-              textShadow: "0 0 8px #ff3d00",
-              flexGrow: 1,
-              marginLeft: "60px",
-            }}
-          >
-            🎃 Welcome Teacher {teacherName || ""}
-          </Typography>
-
+        <Box sx={{ flexGrow: 1, ml: "5px" }}>
+  <Typography
+    variant="h6"
+    sx={{
+      fontWeight: 600,
+      color: "#b71c1c", // warm red
+      lineHeight: 1.3,
+      textShadow: "0 0 6px rgba(255,215,0,0.7), 0 0 4px rgba(76,175,80,0.5)", // gold + green glow
+    }}
+  >
+    🎄 Merry Christmas, Teacher {teacherName || "Teacher"}!
+  </Typography>
+  <Typography
+    variant="subtitle2"
+    sx={{
+      color: "#4e342e", // soft brown for warmth
+      textShadow: "0 0 3px rgba(255,235,59,0.5)", // subtle golden glow
+      mt: 0.5,
+    }}
+  >
+    Wishing you a warm and joyful season ✨
+  </Typography>
+</Box>
           {/* Avatar / Drawer toggle */}
           <IconButton onClick={openDrawer} sx={{ p: 0 }}>
             <Avatar
-              src={photoURL || pumpkinIcon}
+              src={photoURL}
               alt={teacherName || "Teacher"}
               sx={{
                 width: 42,
                 height: 42,
-                border: "2px solid #ff6f00",
-                boxShadow: "0 0 10px #ff6f00, 0 0 20px #ff3d00",
-                animation: "glow 2s infinite alternate",
-                "&:hover": { transform: "scale(1.08)" },
+                border: "1px solid rgba(0,0,0,0.1)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                transition: "transform 0.2s",
+                "&:hover": { transform: "scale(1.05)" },
               }}
             >
               {!photoURL && (teacherName ? teacherName[0].toUpperCase() : "T")}
@@ -129,7 +159,7 @@ const TeacherTopbar = ({ open }) => {
       {/* Drawer Backdrop */}
       <Backdrop
         open={drawerOpen}
-        sx={{ zIndex: 1200, backgroundColor: "rgba(0,0,0,0.35)", backdropFilter: "blur(5px)" }}
+        sx={{ zIndex: 1200, backgroundColor: "rgba(0,0,0,0.2)", backdropFilter: "blur(5px)" }}
         onClick={closeDrawer}
       />
 
@@ -154,16 +184,19 @@ const TeacherTopbar = ({ open }) => {
                 width: "100%",
                 height: "100%",
                 borderRadius: "20px 0 0 20px",
-                background: "rgba(0,0,0,0.35)",
-                backdropFilter: "blur(20px)",
-                boxShadow: "0 0 20px #ff6f00 inset",
-                color: "#fff",
+                background: "rgba(255,255,255,0.42)",
+                backdropFilter: "blur(25px)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                color: "#111",
                 display: "flex",
                 flexDirection: "column",
                 pointerEvents: "auto",
                 overflow: "hidden",
+                position: "relative",
               }}
             >
+              {AmbientGlow}
+
               {/* Close Button */}
               <Tooltip title="Close Menu" placement="left">
                 <IconButton
@@ -172,13 +205,13 @@ const TeacherTopbar = ({ open }) => {
                     position: "absolute",
                     top: 10,
                     right: 10,
-                    bgcolor: "rgba(255,255,255,0.1)",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    "&:hover": { bgcolor: "rgba(255,255,255,0.25)", transform: "scale(1.05)" },
+                    bgcolor: "rgba(255,255,255,0.5)",
+                    border: "1px solid rgba(0,0,0,0.1)",
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.7)", transform: "scale(1.05)" },
                   }}
                   size="small"
                 >
-                  <CloseIcon sx={{ color: "#fff" }} />
+                  <CloseIcon sx={{ color: "#111" }} />
                 </IconButton>
               </Tooltip>
 
@@ -187,23 +220,24 @@ const TeacherTopbar = ({ open }) => {
                 sx={{
                   flex: 1,
                   overflowY: "auto",
-                  p: 2,
+                  p: 3,
+                  mt: 5,
                   "&::-webkit-scrollbar": { width: 6 },
-                  "&::-webkit-scrollbar-thumb": { background: "rgba(255,255,255,0.2)", borderRadius: 10 },
+                  "&::-webkit-scrollbar-thumb": { background: "rgba(0,0,0,0.1)", borderRadius: 10 },
                 }}
               >
                 {/* Profile Section */}
                 <Box sx={{ textAlign: "center", mt: 2 }}>
                   <Avatar
-                    src={photoURL || pumpkinIcon}
+                    src={photoURL}
                     alt={teacherName}
                     sx={{
                       width: 80,
                       height: 80,
                       mx: "auto",
                       mb: 1.5,
-                      boxShadow: "0 0 20px #ff6f00, 0 0 30px #ff3d00",
-                      animation: "glow 2s infinite alternate",
+                      boxShadow: "0 6px 16px rgba(0,0,0,0.18)",
+                      borderRadius: "22px",
                     }}
                   />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -211,50 +245,58 @@ const TeacherTopbar = ({ open }) => {
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 0.5 }}>
                     <EmailIcon fontSize="small" sx={{ color: "gray" }} />
-                    <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                    <Typography variant="body2" sx={{ color: "rgba(0,0,0,0.6)" }}>
                       {currentUser?.email}
                     </Typography>
                   </Box>
                 </Box>
 
-                {/* Menu Items with pumpkin glow */}
-                <List>
+                <Divider sx={{ my: 2, opacity: 0.4 }} />
+
+                {/* Menu Items */}
+                <List sx={{ mt: 1 }}>
                   {[
-                    { icon: pumpkinIcon, label: "My Profile", action: () => navigate("/teacher/profile") },
-                    { icon: pumpkinIcon, label: "Settings", action: () => navigate("/teacher/settings") },
-                    { icon: pumpkinIcon, label: "Logout", action: handleLogout },
+                    { icon: <ProfileIcon />, label: "My Profile", action: () => navigate("/teacher/profile") },
+                    { icon: <SettingsIcon />, label: "Settings", action: () => navigate("/teacher/settings") },
+                    { icon: <LogoutIcon />, label: "Logout", action: handleLogout },
                   ].map((item, i) => (
-                    <ListItem disablePadding key={i}>
-                      <ListItemButton onClick={item.action} sx={{ "&:hover": { boxShadow: "0 0 15px #ff6f00" } }}>
-                        <ListItemIcon>
-                          <Box
-                            component="img"
-                            src={item.icon}
-                            alt="icon"
-                            sx={{ width: 24, height: 24, filter: "drop-shadow(0 0 4px #ff6f00) drop-shadow(0 0 10px #ff3d00)", animation: "glow 2s infinite alternate" }}
-                          />
-                        </ListItemIcon>
-                        <ListItemText primary={item.label} sx={{ color: "#fff" }} />
-                      </ListItemButton>
-                    </ListItem>
+                    <ListItemButton
+                      key={i}
+                      onClick={item.action}
+                      sx={{
+                        borderRadius: 2,
+                        mb: 1,
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        px: 2,
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: "#111", minWidth: 36 }}>{item.icon}</ListItemIcon>
+                      <ListItemText primary={item.label} sx={{ color: "#111" }} />
+                    </ListItemButton>
                   ))}
                 </List>
+
+                {/* Footer */}
+                <Typography
+                  variant="caption"
+                  sx={{
+                    position: "absolute",
+                    bottom: 14,
+                    width: "100%",
+                    textAlign: "center",
+                    color: "rgba(0,0,0,0.5)",
+                  }}
+                >
+                  © {new Date().getFullYear()} Teacher Portal
+                </Typography>
               </Box>
             </Box>
           </Slide>
         </Box>
       )}
-
-      {/* Glowing Keyframes */}
-      <style>
-        {`
-          @keyframes glow {
-            0% { filter: drop-shadow(0 0 4px #ff6f00) drop-shadow(0 0 10px #ff3d00); }
-            50% { filter: drop-shadow(0 0 8px #ff6f00) drop-shadow(0 0 20px #ff3d00); }
-            100% { filter: drop-shadow(0 0 4px #ff6f00) drop-shadow(0 0 10px #ff3d00); }
-          }
-        `}
-      </style>
     </>
   );
 };

@@ -32,7 +32,7 @@ import TeacherSidebar from "../../components/TeacherSidebar";
 import TeacherTopbar from "../../components/TeacherTopbar";
 import { useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import bg from "../../assets/bg.gif"; // spooky Halloween background
+import bg from "../../assets/christmas.gif"; 
 
 const storage = getStorage();
 const drawerWidth = 240;
@@ -239,32 +239,20 @@ const Profile = () => {
           zIndex: -3,
         }}
       />
-      <Box
-        sx={{
-          position: "absolute",
-          width: "200%",
-          height: "200%",
-          background: "radial-gradient(rgba(0,0,0,0.25), transparent 70%)",
-          animation: "smoke 80s linear infinite",
-          zIndex: -2,
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          width: "100%",
-          height: "100%",
-          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8))",
-          zIndex: -1,
-        }}
-      />
-      <style>{`
-        @keyframes smoke {
-          0% { transform: translate(0,0) rotate(0deg); }
-          50% { transform: translate(-20%, -20%) rotate(180deg); }
-          100% { transform: translate(0,0) rotate(360deg); }
-        }
-      `}</style>
+       {/* Frosted overlay */}
+            <Box
+              sx={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                backgroundColor: "rgba(255,255,255,0.05)",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
+                zIndex: -1,
+              }}
+            />
 
       <TeacherSidebar
         open={sidebarOpen}
@@ -292,10 +280,10 @@ const Profile = () => {
               width: "100%",
               maxWidth: 700,
               borderRadius: 4,
-              boxShadow: "0 0 20px rgba(255,87,34,0.5)",
-              bgcolor: "rgba(0,0,0,0.65)",
-              backdropFilter: "blur(6px)",
+              bgcolor: "rgba(0, 0, 0, 0.4)",
+              backdropFilter: "blur(8px)",
               color: "#fff",
+              border: "1px solid rgba(255,255,255,0.2)",
             }}
           >
             {/* Avatar */}
@@ -306,19 +294,18 @@ const Profile = () => {
                   width: 80,
                   height: 80,
                   mr: 3,
-                  bgcolor: "#ff5722",
+                  bgcolor: "#b71c1c", // deep red
                   fontSize: 28,
-                  boxShadow: "0 0 15px #ff9800",
                 }}
               >
                 {!formData.photoURL && (formData.name ? formData.name[0].toUpperCase() : "T")}
               </Avatar>
-              <Typography variant="h5" sx={{ color: "#ffcc00", fontWeight: "bold" }}>
+              <Typography variant="h5" sx={{ color: "#ffeb3b", fontWeight: "bold", textShadow: "0 0 4px #b71c1c, 0 0 6px #4caf50" }}>
                 {formData.name || "Teacher Name"}
               </Typography>
             </Box>
 
-            <Divider sx={{ mb: 2, borderColor: "#ff5722" }} />
+            <Divider sx={{ mb: 2, borderColor: "#4caf50" }} />
 
             {/* Editable Fields */}
             <TextField
@@ -329,7 +316,7 @@ const Profile = () => {
               fullWidth
               margin="normal"
               InputProps={{ sx: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+              InputLabelProps={{ sx: { color: "#ffeb3b" } }}
             />
             <TextField
               label="Phone Number"
@@ -339,7 +326,7 @@ const Profile = () => {
               fullWidth
               margin="normal"
               InputProps={{ sx: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+              InputLabelProps={{ sx: { color: "#ffeb3b" } }}
             />
             <TextField
               label="Gender"
@@ -350,7 +337,7 @@ const Profile = () => {
               fullWidth
               margin="normal"
               InputProps={{ sx: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+              InputLabelProps={{ sx: { color: "#ffeb3b" } }}
             >
               <MenuItem value="Male">Male</MenuItem>
               <MenuItem value="Female">Female</MenuItem>
@@ -364,12 +351,12 @@ const Profile = () => {
               fullWidth
               margin="normal"
               InputProps={{ sx: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffcc00" } }}
+              InputLabelProps={{ sx: { color: "#ffeb3b" } }}
             />
 
             {/* GCash QR Upload */}
             <Box sx={{ mt: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#ffcc00" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: "bold", color: "#ffeb3b" }}>
                 GCash QR Code for Payroll
               </Typography>
               {formData.gcashQR ? (
@@ -377,7 +364,7 @@ const Profile = () => {
                   <img
                     src={formData.gcashQR}
                     alt="GCash QR"
-                    style={{ maxWidth: "200px", borderRadius: "8px", border: "2px solid #ff9800" }}
+                    style={{ maxWidth: "200px", borderRadius: "8px", border: "2px solid #4caf50" }}
                   />
                   <Box sx={{ mt: 1 }}>
                     <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)}>
@@ -386,31 +373,31 @@ const Profile = () => {
                   </Box>
                 </Box>
               ) : (
-                <Typography variant="body2" sx={{ mb: 1, color: "#ffcc00" }}>
+                <Typography variant="body2" sx={{ mb: 1, color: "#ffeb3b" }}>
                   No QR uploaded yet
                 </Typography>
               )}
 
               {loading && uploadProgress > 0 && uploadProgress < 100 && (
                 <Box sx={{ mt: 2 }}>
-                  <LinearProgress variant="determinate" value={uploadProgress} sx={{ bgcolor: "#ffcc00" }} />
+                  <LinearProgress variant="determinate" value={uploadProgress} sx={{ bgcolor: "#ffeb3b" }} />
                   <Typography variant="body2" sx={{ mt: 1 }}>
                     Uploading... {Math.round(uploadProgress)}%
                   </Typography>
                 </Box>
               )}
 
-              <Button variant="outlined" component="label" disabled={loading} sx={{ color: "#ffcc00", borderColor: "#ffcc00" }}>
+              <Button variant="outlined" component="label" disabled={loading} sx={{ color: "#ffeb3b", borderColor: "#ffeb3b" }}>
                 Upload GCash QR
                 <input type="file" hidden accept="image/*" onChange={handleUploadQR} />
               </Button>
             </Box>
 
             {/* Email & Role */}
-            <Typography variant="body1" sx={{ mt: 3, color: "#ffcc00" }}>
+            <Typography variant="body1" sx={{ mt: 3, color: "#ffeb3b" }}>
               <strong>Email:</strong> {teacher?.email || currentUser?.email}
             </Typography>
-            <Typography variant="body1" sx={{ color: "#ffcc00" }}>
+            <Typography variant="body1" sx={{ color: "#ffeb3b" }}>
               <strong>Role:</strong> {teacher?.role || "Teacher"}
             </Typography>
 
@@ -418,7 +405,7 @@ const Profile = () => {
               variant="contained"
               sx={{
                 mt: 3,
-                bgcolor: "#ff5722",
+                bgcolor: "#b71c1c",
                 color: "#fff",
                 fontWeight: "bold",
                 "&:hover": { bgcolor: "#ff9800" },

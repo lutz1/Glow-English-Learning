@@ -41,12 +41,12 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
 import { useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import bg from "../../assets/bg.gif";
+import bg from "../../assets/christmas.gif"; 
 
 const CLASS_SETTINGS = {
   "Private Class": {
     rate: 100,
-    duration: 25,
+    duration: 30,
     icon: <Person fontSize="large" sx={{ color: "#fff" }} />,
     gradient: "linear-gradient(135deg, #42a5f5, #1e88e5)",
     custom: true,
@@ -394,22 +394,20 @@ const StartSession = () => {
           zIndex: -2,
         }}
       />
-      <Box
-        sx={{
-          position: "absolute",
-          width: "100%",
-          height: "100%",
-          background: "linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8))",
-          zIndex: -1,
-        }}
-      />
-      <style>{`
-        @keyframes smoke {
-          0% { transform: translate(0,0) rotate(0deg); }
-          50% { transform: translate(-20%, -20%) rotate(180deg); }
-          100% { transform: translate(0,0) rotate(360deg); }
-        }
-      `}</style>
+      {/* Frosted overlay */}
+            <Box
+              sx={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                backgroundColor: "rgba(255,255,255,0.05)",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
+                zIndex: -1,
+              }}
+            />
 
       <TeacherSidebar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <Box
@@ -424,21 +422,30 @@ const StartSession = () => {
       >
         <TeacherTopbar open={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
-        <Box sx={{ flexGrow: 1, overflowY: "auto", px: { xs: 2, sm: 3, md: 3 }, pt: "64px" }}>
+        <Box sx={{ flexGrow: 1,mt: 2, overflowY: "auto", px: { xs: 2, sm: 3, md: 3 }, pt: "64px" }}>
           <Typography
-            variant="h4"
-            fontWeight="bold"
-            gutterBottom
-            sx={{ color: "#ff9800", textShadow: "0 0 12px #ff5722", textAlign: "center" }}
-          >
-            🎃 Spooky Start Session
-          </Typography>
-          <Typography
-            variant="subtitle1"
-            sx={{ mb: 4, color: "#f5f5f5", textShadow: "0 0 4px #ff9800", textAlign: "center" }}
-          >
-            Begin your classes in Halloween style! Track time, earnings, and upload screenshots.
-          </Typography>
+  variant="h4"
+  fontWeight="bold"
+  gutterBottom
+  sx={{ 
+    color: "#b71c1c", // warm red
+    textShadow: "0 0 12px #ffeb3b, 0 0 8px #4caf50", // gold and green glow
+    textAlign: "center" 
+  }}
+>
+  🎄 Merry Christmas! Start Session
+</Typography>
+<Typography
+  variant="subtitle1"
+  sx={{ 
+    mb: 4, 
+    color: "#fffde7", // soft cream for warmth
+    textShadow: "0 0 4px #ffeb3b, 0 0 4px #4caf50", 
+    textAlign: "center" 
+  }}
+>
+  Begin your classes in festive cheer! Track time, earnings, and upload screenshots. 🎁✨
+</Typography>
 
           {/* ===== Main Paper UI ===== */}
           <Paper
