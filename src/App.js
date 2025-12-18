@@ -14,6 +14,7 @@ import TeacherPerformance from "./pages/admin/Performance";
 import StartSession from "./pages/teacher/StartSession";
 import TeacherProfile from "./pages/teacher/Profile";
 import TeacherSettings from "./pages/teacher/Settings";
+import CalendarofEvents from "./pages/teacher/CalendarofEvents";
 import AdminSettings from "./pages/admin/AdminSettings";
 import Notifications from "./pages/admin/Notifications";
 import EventsPage from "./pages/admin/EventsPage";
@@ -176,6 +177,14 @@ const App = () => {
             element={
               <PrivateRoute role="teacher">
                 <TeacherSettings />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/teacher/calendar"
+            element={
+              <PrivateRoute role="teacher">
+                <CalendarofEvents />
               </PrivateRoute>
             }
           />

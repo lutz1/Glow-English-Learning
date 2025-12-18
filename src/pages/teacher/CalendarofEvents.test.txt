@@ -1,0 +1,6 @@
+manual test checklist
+- admin: add events with title, start/end, type Meeting/Class/Holiday/Other -> appears on admin calendar, persists firestore
+- teacher: sidebar shows Calendar of Events menu -> navigates to /teacher/calendar
+- teacher calendar view loads events read-only, correct colors/icons
+- upcoming list shows next 5 chronologically
+- mobile: calendar defaults to listWeek header options remain functional

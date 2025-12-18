@@ -30,6 +30,7 @@ import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import MusicNoteRoundedIcon from "@mui/icons-material/MusicNoteRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
 
 const drawerWidth = 240;
 
@@ -137,6 +138,7 @@ const TeacherSidebar = ({ open, onToggleSidebar }) => {
 
   const menuItems = [
     { text: "Dashboard", path: "/teacher/dashboard", icon: <DashboardRoundedIcon /> },
+    { text: "Calendar of Events", path: "/teacher/calendar", icon: <EventAvailableRoundedIcon /> },
     { text: "Start Session", path: "/teacher/start-session", icon: <PlayCircleRoundedIcon /> },
     { text: "My Profile", path: "/teacher/profile", icon: <PersonRoundedIcon /> },
     { text: "Settings", path: "/teacher/settings", icon: <SettingsRoundedIcon /> },

@@ -21,14 +21,11 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import { collection, addDoc, onSnapshot, deleteDoc, doc } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import EventIcon from "@mui/icons-material/Event";
 import SchoolIcon from "@mui/icons-material/School";
 import WorkIcon from "@mui/icons-material/Work";
-
-// animation
-import { motion } from "framer-motion";
 
 const eventTypeColors = {
   Meeting: "#3498db",
@@ -47,10 +44,7 @@ const eventTypeIcons = {
 const EventsPage = () => {
   const [events, setEvents] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
-  const [newEvent, setNewEvent] = useState({ title: "", start: "", end: "", type: "Other" });
-
-  // 🚨 disable toggle
-  const [disabled, setDisabled] = useState(true);
+  const [newEvent, setNewEvent] = useState({ title: "", description: "", start: "", end: "", type: "Other" });
 
   // Fetch events
   useEffect(() => {
@@ -63,6 +57,7 @@ const EventsPage = () => {
         return {
           id: docSnap.id,
           title: data.title,
+          description: data.description || "",
           start,
           end,
           type: data.type || "Other",
@@ -75,10 +70,28 @@ const EventsPage = () => {
 
   // Add new event
   const handleAddEvent = async () => {
-    if (!newEvent.title || !newEvent.start || !newEvent.end) return;
-    await addDoc(collection(db, "events"), newEvent);
-    setNewEvent({ title: "", start: "", end: "", type: "Other" });
-    setOpenDialog(false);
+    const trimmedTitle = newEvent.title.trim();
+    if (!trimmedTitle || !newEvent.start) return;
+
+    const startDate = new Date(newEvent.start);
+    const parsedEnd = newEvent.end ? new Date(newEvent.end) : startDate;
+    if (Number.isNaN(startDate.getTime())) return;
+    const endDate = Number.isNaN(parsedEnd.getTime()) ? startDate : parsedEnd;
+    const normalizedEnd = endDate < startDate ? startDate : endDate;
+
+    try {
+      await addDoc(collection(db, "events"), {
+        title: trimmedTitle,
+        description: newEvent.description.trim(),
+        start: Timestamp.fromDate(startDate),
+        end: Timestamp.fromDate(normalizedEnd),
+        type: newEvent.type || "Other",
+      });
+      setNewEvent({ title: "", description: "", start: "", end: "", type: "Other" });
+      setOpenDialog(false);
+    } catch (error) {
+      console.error("Failed to add event", error);
+    }
   };
 
   // Delete event
@@ -90,11 +103,11 @@ const EventsPage = () => {
 
   // Date selection
   const handleDateSelect = (selectInfo) => {
-    setNewEvent({
-      ...newEvent,
+    setNewEvent((prev) => ({
+      ...prev,
       start: selectInfo.startStr,
       end: selectInfo.endStr || selectInfo.startStr,
-    });
+    }));
     setOpenDialog(true);
   };
 
@@ -119,53 +132,42 @@ const EventsPage = () => {
     );
   };
 
-  // Building animation (grid blocks)
-  const BuildingAnimation = () => {
-    const blocks = Array.from({ length: 9 });
-    return (
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 30px)",
-          gap: "6px",
-          mb: 2,
-        }}
-      >
-        {blocks.map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{
-              duration: 0.4,
-              delay: i * 0.2,
-              repeat: Infinity,
-              repeatType: "reverse",
-            }}
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 6,
-              backgroundColor: i % 2 === 0 ? "#3498db" : "#2ecc71",
-            }}
-          />
-        ))}
-      </Box>
-    );
-  };
-
   return (
     <Box sx={{ display: "flex" }}>
       <Sidebar />
-      <Box sx={{ flexGrow: 1, minHeight: "100vh", bgcolor: "#f4f6f8" }}>
+      <Box sx={{ flexGrow: 1, minHeight: "100vh", background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)" }}>
         <Topbar />
         <Box sx={{ p: 3, mt: 8 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
-            📅 Events Calendar
-          </Typography>
+          <Box
+            sx={{
+              background: "rgba(255,255,255,0.08)",
+              backdropFilter: "blur(18px)",
+              borderRadius: "18px",
+              boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
+              p: 3,
+              color: "#fff",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: 3,
+                gap: 2,
+                flexWrap: "wrap",
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, color: "#64b5f6" }}>
+                📅 Events Calendar
+              </Typography>
+              <Button variant="contained" startIcon={<EventIcon />} onClick={() => setOpenDialog(true)} sx={{ bgcolor: "#64b5f6", "&:hover": { bgcolor: "#90caf9" } }}>
+                Add Event
+              </Button>
+            </Box>
 
-          {/* Calendar Wrapper with Overlay */}
-          <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden" }}>
+            {/* Calendar Wrapper */}
+            <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden" }}>
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
               initialView="dayGridMonth"
@@ -174,8 +176,8 @@ const EventsPage = () => {
                 center: "title",
                 right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
               }}
-              editable={!disabled}
-              selectable={!disabled}
+              editable
+              selectable
               selectMirror={true}
               dayMaxEvents={true}
               select={handleDateSelect}
@@ -192,67 +194,99 @@ const EventsPage = () => {
               slotMaxTime="20:00:00"
             />
 
-            {/* Overlay */}
-            {disabled && (
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  bgcolor: "rgba(255,255,255,0.85)",
-                  backdropFilter: "blur(6px)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexDirection: "column",
-                  zIndex: 10,
-                }}
-              >
-                <BuildingAnimation />
-                <Typography variant="h6" sx={{ fontWeight: 600, color: "#2c3e50" }}>
-                  Building Calendar...
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#7f8c8d", mt: 1 }}>
-                  This feature is coming soon
-                </Typography>
-              </Box>
-            )}
+            </Box>
           </Box>
 
           {/* Add Event Dialog */}
-          <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
-            <DialogTitle>Add New Event</DialogTitle>
-            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { background: "rgba(20,30,48,0.95)", color: "#fff", borderRadius: 3, border: "1px solid rgba(255,255,255,0.1)" } }}>
+            <DialogTitle sx={{ fontWeight: 700, fontSize: "1.3rem", color: "#64b5f6" }}>Add New Event</DialogTitle>
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 2, borderColor: "rgba(255,255,255,0.1)" }}>
               <TextField
                 label="Event Title"
+                placeholder="e.g., Staff Meeting, Holiday Break"
                 value={newEvent.title}
                 onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
                 fullWidth
+                variant="outlined"
+                size="medium"
+                InputLabelProps={{ style: { color: "rgba(255,255,255,0.7)" } }}
+                InputProps={{ style: { color: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                    "&:hover fieldset": { borderColor: "#64b5f6" },
+                    "&.Mui-focused fieldset": { borderColor: "#64b5f6" },
+                  },
+                }}
+              />
+              <TextField
+                label="Description"
+                placeholder="Provide details about this event..."
+                value={newEvent.description}
+                onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                fullWidth
+                variant="outlined"
+                multiline
+                rows={3}
+                size="medium"
+                InputLabelProps={{ style: { color: "rgba(255,255,255,0.7)" } }}
+                InputProps={{ style: { color: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                    "&:hover fieldset": { borderColor: "#64b5f6" },
+                    "&.Mui-focused fieldset": { borderColor: "#64b5f6" },
+                  },
+                }}
               />
               <TextField
                 label="Start Date & Time"
                 type="datetime-local"
-                InputLabelProps={{ shrink: true }}
+                InputLabelProps={{ shrink: true, style: { color: "rgba(255,255,255,0.7)" } }}
                 value={newEvent.start}
                 onChange={(e) => setNewEvent({ ...newEvent, start: e.target.value })}
                 fullWidth
+                variant="outlined"
+                InputProps={{ style: { color: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                    "&:hover fieldset": { borderColor: "#64b5f6" },
+                    "&.Mui-focused fieldset": { borderColor: "#64b5f6" },
+                  },
+                }}
               />
               <TextField
                 label="End Date & Time"
                 type="datetime-local"
-                InputLabelProps={{ shrink: true }}
+                InputLabelProps={{ shrink: true, style: { color: "rgba(255,255,255,0.7)" } }}
                 value={newEvent.end}
                 onChange={(e) => setNewEvent({ ...newEvent, end: e.target.value })}
                 fullWidth
+                variant="outlined"
+                InputProps={{ style: { color: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                    "&:hover fieldset": { borderColor: "#64b5f6" },
+                    "&.Mui-focused fieldset": { borderColor: "#64b5f6" },
+                  },
+                }}
               />
-              <FormControl fullWidth>
-                <InputLabel>Event Type</InputLabel>
+              <FormControl fullWidth sx={{
+                "& .MuiOutlinedInput-root": {
+                  "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                  "&:hover fieldset": { borderColor: "#64b5f6" },
+                  "&.Mui-focused fieldset": { borderColor: "#64b5f6" },
+                },
+                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.7)" },
+              }}>
+                <InputLabel sx={{ color: "rgba(255,255,255,0.7)" }}>Event Type</InputLabel>
                 <Select
                   value={newEvent.type}
                   label="Event Type"
                   onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value })}
+                  sx={{ color: "#fff" }}
                 >
                   <MenuItem value="Meeting">Meeting</MenuItem>
                   <MenuItem value="Class">Class</MenuItem>
@@ -261,10 +295,12 @@ const EventsPage = () => {
                 </Select>
               </FormControl>
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-              <Button variant="contained" onClick={handleAddEvent}>
-                Add
+            <DialogActions sx={{ p: 2, gap: 1, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              <Button onClick={() => setOpenDialog(false)} variant="outlined" sx={{ color: "#e57373", borderColor: "#e57373", "&:hover": { backgroundColor: "rgba(229,115,115,0.1)" } }}>
+                Cancel
+              </Button>
+              <Button variant="contained" onClick={handleAddEvent} sx={{ bgcolor: "#64b5f6", "&:hover": { bgcolor: "#90caf9" } }}>
+                Add Event
               </Button>
             </DialogActions>
           </Dialog>
