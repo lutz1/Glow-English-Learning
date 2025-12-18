@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if current user is admin
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read, write, delete: if isAdmin();
+
+      // Owner can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Owner can update only safe fields
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['name','phone','gender','photoURL','gcashQR','updatedAt']);
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read, write, delete: if isAdmin();
+
+      // Allow unauthenticated password reset requests
+      allow create: if request.resource.data.keys().hasOnly(['type','teacherEmail','status','createdAt'])
+                    && request.resource.data.type == "password_reset_request"
+                    && request.resource.data.teacherEmail is string
+                    && request.resource.data.status == "pending"
+                    && request.resource.data.createdAt != null;
+    }
+
+    // Sessions collection
+    match /sessions/{sessionId} {
+      allow create, read, update, delete: if isAdmin();
+
+      // Teachers can create their own sessions
+      allow create: if request.auth != null
+                    && request.resource.data.teacherId == request.auth.uid
+                    && request.resource.data.classType is string
+                    && request.resource.data.status == "ongoing"
+                    && request.resource.data.startTime != null;
+
+      // Teachers can read/update/delete only their own sessions
+      allow read, update, delete: if request.auth != null
+                                  && resource.data.teacherId == request.auth.uid;
+    }
+
+    // Active session locks (per teacher)
+    match /activeSessions/{userId} {
+      // Admins full access
+      allow read, write, delete: if isAdmin();
+
+      // Teacher can manage their own lock doc
+      allow create: if request.auth != null
+                    && userId == request.auth.uid
+                    && request.resource.data.sessionId is string
+                    && request.resource.data.status in ["ongoing", "awaiting_screenshot"]
+                    && request.resource.data.createdAt != null;
+      allow read, update, delete: if request.auth != null && userId == request.auth.uid;
+    }
+
+    // Events collection
+    match /events/{eventId} {
+      allow read, write, delete: if isAdmin();
+
+      // Teachers can only read events
+      allow read: if request.auth != null
+                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "teacher";
+    }
+
+    // Payroll History collection
+    match /payrollHistory/{docId} {
+      allow read, write, delete: if isAdmin();
+    }
+
+    // Settings (for GCash QR)
+    match /settings/{docId} {
+      // Admins can manage GCash QR or other settings
+      allow read, write: if isAdmin();
+
+      // Allow all logged-in users to read only the GCash QR document
+      allow read: if request.auth != null && docId == "gcashQR";
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

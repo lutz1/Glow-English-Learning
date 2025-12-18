@@ -1,5 +1,5 @@
 // src/pages/teacher/Profile.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
   Typography,
@@ -47,6 +47,8 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -149,6 +151,45 @@ const Profile = () => {
       console.error("Error uploading QR:", error);
       setSnackbar({ open: true, message: "Failed to upload GCash QR. " + (error.message || ""), severity: "error" });
       setLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e) => {
+    if (!currentUser?.uid) return;
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    try {
+      if (formData.photoURL) {
+        const oldPath = getPathFromUrl(formData.photoURL);
+        if (oldPath) {
+          await deleteObject(storageRef(storage, oldPath)).catch(() => {});
+        }
+      }
+      const uniqueName = `${Date.now()}_${file.name}`;
+      const photoRef = storageRef(storage, `teacherPhotos/${currentUser.uid}/${uniqueName}`);
+      const uploadTask = uploadBytesResumable(photoRef, file);
+      uploadTask.on(
+        "state_changed",
+        () => {},
+        (error) => {
+          console.error("Error uploading avatar:", error);
+          setSnackbar({ open: true, message: "Failed to upload profile image.", severity: "error" });
+          setUploadingAvatar(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          await updateDoc(doc(db, "users", currentUser.uid), { photoURL: downloadURL, updatedAt: serverTimestamp() });
+          setFormData((prev) => ({ ...prev, photoURL: downloadURL }));
+          setSnackbar({ open: true, message: "Profile image updated!", severity: "success" });
+          setUploadingAvatar(false);
+        }
+      );
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      setSnackbar({ open: true, message: "Failed to upload profile image.", severity: "error" });
+      setUploadingAvatar(false);
     }
   };
 
@@ -290,16 +331,20 @@ const Profile = () => {
             <Box display="flex" alignItems="center" mb={3}>
               <Avatar
                 src={formData.photoURL || undefined}
+                onClick={() => !uploadingAvatar && avatarInputRef.current && avatarInputRef.current.click()}
                 sx={{
                   width: 80,
                   height: 80,
                   mr: 3,
                   bgcolor: "#b71c1c", // deep red
                   fontSize: 28,
+                  cursor: uploadingAvatar ? "not-allowed" : "pointer",
+                  opacity: uploadingAvatar ? 0.7 : 1,
                 }}
               >
                 {!formData.photoURL && (formData.name ? formData.name[0].toUpperCase() : "T")}
               </Avatar>
+              <input ref={avatarInputRef} type="file" hidden accept="image/*" onChange={handleAvatarUpload} />
               <Typography variant="h5" sx={{ color: "#ffeb3b", fontWeight: "bold", textShadow: "0 0 4px #b71c1c, 0 0 6px #4caf50" }}>
                 {formData.name || "Teacher Name"}
               </Typography>
@@ -343,16 +388,7 @@ const Profile = () => {
               <MenuItem value="Female">Female</MenuItem>
               <MenuItem value="Other">Other</MenuItem>
             </TextField>
-            <TextField
-              label="Profile Picture URL"
-              name="photoURL"
-              value={formData.photoURL}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              InputProps={{ sx: { color: "#fff" } }}
-              InputLabelProps={{ sx: { color: "#ffeb3b" } }}
-            />
+            {/* Profile picture URL removed; click avatar to upload */}
 
             {/* GCash QR Upload */}
             <Box sx={{ mt: 3 }}>

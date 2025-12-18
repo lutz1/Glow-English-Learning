@@ -19,6 +19,7 @@ import {
   List,
   ListItem,
   Tooltip,
+  TablePagination,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PaidIcon from "@mui/icons-material/AttachMoney";
@@ -31,10 +32,10 @@ import {
   orderBy,
   query,
   doc,
-  addDoc,
   deleteDoc,
   updateDoc,
   where,
+  setDoc,
 } from "firebase/firestore";
 import { ref as storageRef, deleteObject } from "firebase/storage";
 import AdminLayout from "../../layout/AdminLayout";
@@ -61,6 +62,13 @@ const Payroll = () => {
   const [payrollHistory, setPayrollHistory] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Pagination state
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyRowsPerPage, setHistoryRowsPerPage] = useState(5);
+  const [sessionPage, setSessionPage] = useState(0);
+  const [sessionRowsPerPage, setSessionRowsPerPage] = useState(5);
 
   const fetchPayrollHistory = async () => {
     try {
@@ -115,6 +123,15 @@ const Payroll = () => {
       await fetchPayrollHistory();
     })();
   }, []);
+
+  // Reset pagination when lists or filters change
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [payrollHistory, historyOpen]);
+
+  useEffect(() => {
+    setSessionPage(0);
+  }, [teacherSessions, dateFrom, dateTo, teacherViewOpen]);
 
   // Camera start/stop when dialog opens
   useEffect(() => {
@@ -569,7 +586,11 @@ const Payroll = () => {
       };
 
       console.log("Saving payrollData:", payrollData);
-      await addDoc(collection(db, "payrollHistory"), payrollData);
+      // Use deterministic doc id to avoid duplicates for the same period
+      const periodKeyFrom = dateFrom || "all";
+      const periodKeyTo = dateTo || "all";
+      const deterministicId = `${selectedTeacherId}_${periodKeyFrom}_${periodKeyTo}`;
+      await setDoc(doc(db, "payrollHistory", deterministicId), payrollData);
 
       // --------------------------
       // Mark ONLY filtered sessions as paid
@@ -658,6 +679,17 @@ const Payroll = () => {
     boxShadow: "0 16px 32px rgba(0,0,0,0.5)",
     color: "#fff",
   };
+
+  // Derived lists for pagination
+  const paginatedPayrollHistory = payrollHistory.slice(
+    historyPage * historyRowsPerPage,
+    historyPage * historyRowsPerPage + historyRowsPerPage
+  );
+  const filteredSessionsForDialog = filterByDate(teacherSessions, dateFrom, dateTo);
+  const paginatedSessionsForDialog = filteredSessionsForDialog.slice(
+    sessionPage * sessionRowsPerPage,
+    sessionPage * sessionRowsPerPage + sessionRowsPerPage
+  );
 
   return (
     <AdminLayout>
@@ -850,7 +882,7 @@ const Payroll = () => {
             </Stack>
 
             <Stack spacing={2}>
-              {filterByDate(teacherSessions, dateFrom, dateTo).map((s) => (
+              {paginatedSessionsForDialog.map((s) => (
                 <Card
                   key={s.id}
                   sx={{
@@ -909,6 +941,20 @@ const Payroll = () => {
                 </Card>
               ))}
             </Stack>
+
+            <TablePagination
+              component="div"
+              count={filteredSessionsForDialog.length}
+              page={sessionPage}
+              onPageChange={(_e, p) => setSessionPage(p)}
+              rowsPerPage={sessionRowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setSessionRowsPerPage(parseInt(e.target.value, 10));
+                setSessionPage(0);
+              }}
+              rowsPerPageOptions={[5, 10, 20]}
+              sx={{ color: "#fff" }}
+            />
 
             <Box sx={{ mt: 3, textAlign: "right" }}>
               <Typography variant="h6" fontWeight="bold">
@@ -1080,10 +1126,17 @@ const Payroll = () => {
                       alert("⚠️ Please capture or upload a GCash receipt before generating payroll.");
                       return;
                     }
-                    await generateTeacherPDF(); // this now marks sessions as paid + closes dialog
+                    if (isGenerating) return;
+                    try {
+                      setIsGenerating(true);
+                      await generateTeacherPDF(); // this now marks sessions as paid + closes dialog
+                    } finally {
+                      setIsGenerating(false);
+                    }
                   }}
+                  disabled={isGenerating}
                 >
-                  Generate Payroll
+                  {isGenerating ? "Generating..." : "Generate Payroll"}
                 </Button>
               </Box>
             </Card>
@@ -1205,7 +1258,7 @@ const Payroll = () => {
             {payrollHistory.length === 0 && (
               <Typography>No payroll history found.</Typography>
             )}
-            {payrollHistory.map((h) => (
+            {paginatedPayrollHistory.map((h) => (
               <Card key={h.id} sx={{ mb: 2, p: 2, borderRadius: "12px", position: "relative" }}>
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <Box>
@@ -1237,6 +1290,19 @@ const Payroll = () => {
           </Card>
             ))}
           </List>
+          <TablePagination
+            component="div"
+            count={payrollHistory.length}
+            page={historyPage}
+            onPageChange={(_e, p) => setHistoryPage(p)}
+            rowsPerPage={historyRowsPerPage}
+            onRowsPerPageChange={(e) => {
+              setHistoryRowsPerPage(parseInt(e.target.value, 10));
+              setHistoryPage(0);
+            }}
+            rowsPerPageOptions={[5, 10, 20]}
+            sx={{ color: "#070707ff" }}
+          />
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setHistoryOpen(false)} variant="contained">

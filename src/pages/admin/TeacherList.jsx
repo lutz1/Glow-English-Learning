@@ -15,6 +15,7 @@ import {
   ListItem,
   TextField,
   InputAdornment,
+  TablePagination,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -55,6 +56,8 @@ const TeacherList = () => {
   const [teachers, setTeachers] = useState([]);
   const [filteredTeachers, setFilteredTeachers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
 
   // dialogs
   const [openProfile, setOpenProfile] = useState(false);
@@ -122,7 +125,22 @@ const TeacherList = () => {
         )
       );
     }
+    setPage(0);
   }, [searchQuery, teachers]);
+
+  const handleChangePage = (_event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const paginatedTeachers = filteredTeachers.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
 
   // ✅ Delete Teacher + Sessions (Firestore only)
   const handleDelete = async (id) => {
@@ -400,7 +418,7 @@ const TeacherList = () => {
                   </Box>
                 )}
 
-                {filteredTeachers.map((t) => (
+                {paginatedTeachers.map((t) => (
                   <ListItem
                     key={t.id}
                     sx={{
@@ -505,6 +523,17 @@ const TeacherList = () => {
                   </ListItem>
                 ))}
               </List>
+
+              <TablePagination
+                component="div"
+                count={filteredTeachers.length}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 20]}
+                sx={{ color: "#fff" }}
+              />
             </CardContent>
           </Card>
         </Box>

@@ -19,13 +19,15 @@ import {
   IconButton,
   Tooltip,
   TableSortLabel,
+  TablePagination,
 } from "@mui/material";
 
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, limit } from "firebase/firestore";
 import { db } from "../../firebase";
+import { useAuth } from "../../hooks/useAuth";
 
 import SchoolIcon from "@mui/icons-material/School";
 import PaidIcon from "@mui/icons-material/Paid";
@@ -76,6 +78,8 @@ const statusColors = {
 const statusOrder = ["ongoing", "awaiting_screenshot", "completed"];
 
 const Dashboard = () => {
+  const { currentUser } = useAuth();
+  const isAdminView = ((currentUser?.role || "").toLowerCase() === "admin");
   // counts / maps
   const [teacherCount, setTeacherCount] = useState(0);
   const [teachersMap, setTeachersMap] = useState({});
@@ -102,6 +106,8 @@ const Dashboard = () => {
   // screenshot modal
   const [openScreenshot, setOpenScreenshot] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Status sorting
   const [statusSortAsc, setStatusSortAsc] = useState(true);
@@ -157,19 +163,22 @@ function normalizeRange(range) {
 
   // --- Firestore: load sessions (live) ---
   useEffect(() => {
+    if (!currentUser?.uid) return;
     setLoading(true);
-    const unsub = onSnapshot(collection(db, "sessions"), (snap) => {
+    const isAdmin = (currentUser.role || "").toLowerCase() === "admin";
+    const baseRef = collection(db, "sessions");
+    const q = isAdmin
+      ? query(baseRef, orderBy("startTime", "desc"), limit(200))
+      : query(baseRef, where("teacherId", "==", currentUser.uid), orderBy("startTime", "desc"), limit(200));
+    const unsub = onSnapshot(q, (snap) => {
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setSessions(all.slice(0, 200)); // keep reasonable limit
-      setTotalPayroll(all.filter((s) => s.status === "completed").reduce((acc, s) => acc + (s.totalEarnings || 0), 0));
-      setPendingPayroll(all.filter((s) => s.status === "pending").reduce((acc, s) => acc + (s.totalEarnings || 0), 0));
-      // updateChartData will be invoked by effect below (sessions, period)
+      setSessions(all);
+      setTotalPayroll(all.filter((s) => (s.status || "").toLowerCase() === "completed").reduce((acc, s) => acc + (Number(s.totalEarnings) || 0), 0));
+      setPendingPayroll(all.filter((s) => (s.status || "").toLowerCase() === "pending").reduce((acc, s) => acc + (Number(s.totalEarnings) || 0), 0));
       setLoading(false);
     });
-
     return () => unsub();
-    
-  }, []);
+  }, [currentUser]);
 
   // computeTopTeachers uses topRange (TextFields) — kept separate from latestRange
   useEffect(() => {
@@ -223,6 +232,7 @@ function normalizeRange(range) {
 
   // Update filteredSessions whenever sessions, latestRange or status sorting changes
   const [filteredSessions, setFilteredSessions] = useState([]);
+  const paginatedSessions = filteredSessions.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
 // Update filteredSessions whenever sessions, latestRange, or sorting changes
 useEffect(() => {
@@ -242,16 +252,10 @@ useEffect(() => {
     return { start, end };
   };
 
-  const { start, end } =
-    latestRange?.start && latestRange?.end
-      ? normalizeRange(latestRange)
-      : (() => {
-          // Default: today's full range (local)
-          const now = new Date();
-          const s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-          const e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-          return { start: s, end: e };
-        })();
+  const hasRange = Boolean(latestRange?.start && latestRange?.end);
+  const { start, end } = hasRange
+    ? normalizeRange(latestRange)
+    : { start: null, end: null };
 
   // --- Filter sessions ---
   const filtered = sessions.filter((s) => {
@@ -269,6 +273,8 @@ useEffect(() => {
 
     // Always show ongoing
     if (statusValue === "ongoing") return true;
+
+    if (!hasRange) return true; // No date range selected: show all recent
 
     if (!startTs && !endTs) return false;
 
@@ -312,22 +318,10 @@ useEffect(() => {
   });
 
   // --- Debug helper (optional) ---
-  console.log(
-    "📅 Range:",
-    start.toString(),
-    "→",
-    end.toString(),
-    "\nFiltered sessions:",
-    filtered.map((s) => ({
-      id: s.id,
-      status: s.status,
-      start: s.startTime?.toDate
-        ? s.startTime.toDate().toString()
-        : s.startTime,
-    }))
-  );
+  // console.log("Filtered sessions count:", filtered.length);
 
   setFilteredSessions(filtered);
+  setPage(0); // reset to first page when filter changes
 }, [sessions, latestRange, statusSortAsc, teachersMap]);
 
   // updateChartData (earnings per teacher per class type) kept for other usages
@@ -546,15 +540,14 @@ useEffect(() => {
       const e = new Date(latestRange.end);
       return `${s.toLocaleDateString()} — ${e.toLocaleDateString()}`;
     }
-    const today = new Date();
-    return `${today.toLocaleDateString()}`;
+    return `All recent`;
   })();
 
   return (
     <AdminLayout>
       <Box sx={{ p: 3, minHeight: "100vh",overflowX: "hidden",background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)", color: "#fff" }}>
         {/* HEADER */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
           <Typography variant="h4" fontWeight="bold">
             Admin Dashboard Overview
           </Typography>
@@ -562,6 +555,9 @@ useEffect(() => {
             {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </Typography>
         </Box>
+        <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)", mb: 2, display: "block" }}>
+          Scope: {isAdminView ? "All sessions (admin)" : "My sessions only"}
+        </Typography>
 
         <Divider sx={{ mb: 3, borderColor: "rgba(255,255,255,0.2)" }} />
         <Box sx={{ width: "100%", overflowX: "hidden" }}>
@@ -802,7 +798,7 @@ useEffect(() => {
                     </Box>
                   )}
 
-                  {filteredSessions.map((s) => {
+                  {paginatedSessions.map((s) => {
                     const teacher = teachersMap[s.teacherId] || {};
                     const startTime = s.startTime?.toDate ? s.startTime.toDate() : s.startTime ? new Date(s.startTime) : null;
                     const endTime = s.endTime?.toDate ? s.endTime.toDate() : s.endTime ? new Date(s.endTime) : null;
@@ -960,6 +956,23 @@ useEffect(() => {
                     );
                   })}
                 </List>
+
+                {filteredSessions.length > 0 && (
+                  <TablePagination
+                    component="div"
+                    count={filteredSessions.length}
+                    page={page}
+                    onPageChange={(_, newPage) => setPage(newPage)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => {
+                      setRowsPerPage(parseInt(e.target.value, 10));
+                      setPage(0);
+                    }}
+                    rowsPerPageOptions={[5, 10]}
+                    sx={{ color: "#fff" }}
+                    labelRowsPerPage="Rows"
+                  />
+                )}
               </CardContent>
             </Card>
           </Grid>

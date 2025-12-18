@@ -33,9 +33,11 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   doc,
   updateDoc,
   deleteDoc,
+  runTransaction,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../hooks/useAuth";
@@ -113,30 +115,61 @@ const StartSession = () => {
   const [selectedHours, setSelectedHours] = useState(0);
   const [selectedMinutes, setSelectedMinutes] = useState(0);
   const [cancelDialog, setCancelDialog] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   const startTsRef = useRef(null);
   const intervalRef = useRef(null);
 
-  // Restore unfinished sessions
+  // Restore unfinished sessions (uses activeSessions/{uid} lock for reliability)
   useEffect(() => {
     if (!currentUser) return;
     const fetchSession = async () => {
-      const q = query(
-        collection(db, "sessions"),
-        where("teacherId", "==", currentUser.uid),
-        where("status", "in", ["ongoing", "awaiting_screenshot"])
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const docData = snap.docs[0];
-        const data = docData.data();
-        setSessionId(docData.id);
-        setClassType(data.classType);
-        setTargetSeconds(data.durationSeconds); // use saved duration
-        startTsRef.current = data.startTime?.toDate().getTime();
-        setElapsedSeconds(Math.floor((Date.now() - startTsRef.current) / 1000));
-        setStatus(data.status);
-        setRunning(data.status === "ongoing");
+      try {
+        const lockRef = doc(db, "activeSessions", currentUser.uid);
+        const lockSnap = await getDoc(lockRef);
+
+        if (lockSnap.exists() && lockSnap.data()?.sessionId) {
+          const lockData = lockSnap.data();
+          const sRef = doc(db, "sessions", lockData.sessionId);
+          const sSnap = await getDoc(sRef);
+          if (sSnap.exists()) {
+            const data = sSnap.data();
+            setSessionId(sSnap.id);
+            setClassType(data.classType);
+            setTargetSeconds(data.durationSeconds || 0);
+            const st = data.startTime?.toDate?.()?.getTime?.();
+            if (st) {
+              startTsRef.current = st;
+              setElapsedSeconds(Math.floor((Date.now() - st) / 1000));
+            }
+            setStatus(data.status);
+            setRunning(data.status === "ongoing");
+          }
+        } else {
+          // Legacy fallback: look up by sessions query
+          const q = query(
+            collection(db, "sessions"),
+            where("teacherId", "==", currentUser.uid),
+            where("status", "in", ["ongoing", "awaiting_screenshot"]) 
+          );
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const docData = snap.docs[0];
+            const data = docData.data();
+            setSessionId(docData.id);
+            setClassType(data.classType);
+            setTargetSeconds(data.durationSeconds || 0);
+            const st = data.startTime?.toDate?.()?.getTime?.();
+            if (st) {
+              startTsRef.current = st;
+              setElapsedSeconds(Math.floor((Date.now() - st) / 1000));
+            }
+            setStatus(data.status);
+            setRunning(data.status === "ongoing");
+          }
+        }
+      } catch (e) {
+        // Silent fail: no active session to restore
       }
     };
     fetchSession();
@@ -203,80 +236,112 @@ const StartSession = () => {
 
   const startFixedClass = async () => {
     if (!currentUser) return;
-    const q = query(
-      collection(db, "sessions"),
-      where("teacherId", "==", currentUser.uid),
-      where("status", "in", ["ongoing", "awaiting_screenshot"])
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      alert("⚠️ You already have an active session.");
-      setConfirmDialog(false);
-      return;
-    }
+    if (starting) return;
+    setStarting(true);
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = classConfig.duration;
     const totalEarnings = classConfig.rate;
+    try {
+      const newId = await runTransaction(db, async (tx) => {
+        const lockRef = doc(db, "activeSessions", currentUser.uid);
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists()) {
+          throw new Error("ACTIVE_EXISTS");
+        }
+        const sRef = doc(collection(db, "sessions"));
+        tx.set(sRef, {
+          teacherId: currentUser.uid,
+          classType,
+          rate: classConfig.rate,
+          durationSeconds: totalMinutes * 60,
+          totalEarnings,
+          startTime: serverTimestamp(),
+          status: "ongoing",
+        });
+        tx.set(lockRef, {
+          sessionId: sRef.id,
+          createdAt: serverTimestamp(),
+          status: "ongoing",
+        });
+        return sRef.id;
+      });
 
-    setTargetSeconds(totalMinutes * 60); // stop timer at default duration
-    setElapsedSeconds(0);
-    startTsRef.current = Date.now();
-    setRunning(true);
-    setStatus("ongoing");
-
-    const docRef = await addDoc(collection(db, "sessions"), {
-      teacherId: currentUser.uid,
-      classType,
-      rate: classConfig.rate,
-      durationSeconds: totalMinutes * 60,
-      totalEarnings,
-      startTime: serverTimestamp(),
-      status: "ongoing",
-    });
-    setSessionId(docRef.id);
-    setConfirmDialog(false);
+      setTargetSeconds(totalMinutes * 60);
+      setElapsedSeconds(0);
+      startTsRef.current = Date.now();
+      setRunning(true);
+      setStatus("ongoing");
+      setSessionId(newId);
+      setConfirmDialog(false);
+    } catch (e) {
+      if (e?.message === "ACTIVE_EXISTS") {
+        alert("⚠️ You already have an active session.");
+      } else {
+        alert("❌ Failed to start session. Please try again.");
+        console.error(e);
+      }
+    } finally {
+      setStarting(false);
+    }
   };
 
   // ✅ Updated confirmStart to respect user-selected duration
   const confirmStart = async () => {
     if (!currentUser) return;
-    const q = query(
-      collection(db, "sessions"),
-      where("teacherId", "==", currentUser.uid),
-      where("status", "in", ["ongoing", "awaiting_screenshot"])
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      alert("⚠️ You already have an active session.");
-      setOpenDialog(false);
-      return;
-    }
+    if (starting) return;
+    setStarting(true);
     const classConfig = CLASS_SETTINGS[classType];
     const totalMinutes = selectedHours * 60 + selectedMinutes;
     if (totalMinutes < classConfig.duration) {
       alert(`⚠️ Minimum duration is ${classConfig.duration} minutes`);
+      setStarting(false);
       return;
     }
     const perMinuteRate = classConfig.rate / classConfig.duration;
     const totalEarnings = perMinuteRate * totalMinutes;
+    try {
+      const newId = await runTransaction(db, async (tx) => {
+        const lockRef = doc(db, "activeSessions", currentUser.uid);
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists()) {
+          throw new Error("ACTIVE_EXISTS");
+        }
+        const sRef = doc(collection(db, "sessions"));
+        tx.set(sRef, {
+          teacherId: currentUser.uid,
+          classType,
+          rate: classConfig.rate,
+          durationSeconds: totalMinutes * 60,
+          totalEarnings,
+          startTime: serverTimestamp(),
+          status: "ongoing",
+        });
+        tx.set(lockRef, {
+          sessionId: sRef.id,
+          createdAt: serverTimestamp(),
+          status: "ongoing",
+        });
+        return sRef.id;
+      });
 
-    setTargetSeconds(totalMinutes * 60); // ✅ stop timer at user-set duration
-    setElapsedSeconds(0);
-    startTsRef.current = Date.now();
-    setRunning(true);
-    setStatus("ongoing");
-    setOpenDialog(false);
-
-    const docRef = await addDoc(collection(db, "sessions"), {
-      teacherId: currentUser.uid,
-      classType,
-      rate: classConfig.rate,
-      durationSeconds: totalMinutes * 60,
-      totalEarnings,
-      startTime: serverTimestamp(),
-      status: "ongoing",
-    });
-    setSessionId(docRef.id);
+      setTargetSeconds(totalMinutes * 60);
+      setElapsedSeconds(0);
+      startTsRef.current = Date.now();
+      setRunning(true);
+      setStatus("ongoing");
+      setOpenDialog(false);
+      setSessionId(newId);
+    } catch (e) {
+      if (e?.message === "ACTIVE_EXISTS") {
+        alert("⚠️ You already have an active session.");
+        setOpenDialog(false);
+      } else {
+        alert("❌ Failed to start session. Please try again.");
+        console.error(e);
+      }
+    } finally {
+      setStarting(false);
+    }
   };
 
   const handleStop = async () => {
@@ -290,6 +355,11 @@ const StartSession = () => {
         actualEarnings: CLASS_SETTINGS[classType].rate,
         endTime: serverTimestamp(),
       });
+      try {
+        await updateDoc(doc(db, "activeSessions", currentUser.uid), {
+          status: "awaiting_screenshot",
+        });
+      } catch {}
       setConfirmDialog(false);
     }
   };
@@ -297,6 +367,9 @@ const StartSession = () => {
   const handleCancel = async () => {
     if (sessionId) {
       await deleteDoc(doc(db, "sessions", sessionId));
+      try {
+        await deleteDoc(doc(db, "activeSessions", currentUser.uid));
+      } catch {}
       clearInterval(intervalRef.current);
       setRunning(false);
       setClassType("");
@@ -320,6 +393,11 @@ const StartSession = () => {
         halfPay: true,
         endTime: serverTimestamp(),
       });
+      try {
+        await updateDoc(doc(db, "activeSessions", currentUser.uid), {
+          status: "awaiting_screenshot",
+        });
+      } catch {}
     }
   };
 
@@ -353,6 +431,9 @@ const StartSession = () => {
             screenshotUrl: downloadURL,
             screenshotName: screenshotFile.name,
           });
+          try {
+            await deleteDoc(doc(db, "activeSessions", currentUser.uid));
+          } catch {}
           setStatus("completed");
           setClassType("");
           setRunning(false);
@@ -631,7 +712,7 @@ const StartSession = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-              <Button variant="contained" color="primary" onClick={confirmStart}>
+              <Button variant="contained" color="primary" onClick={confirmStart} disabled={starting}>
                 Start
               </Button>
             </DialogActions>
@@ -641,7 +722,7 @@ const StartSession = () => {
             <DialogTitle>Start {classType}?</DialogTitle>
             <DialogActions>
               <Button onClick={() => setConfirmDialog(false)}>Cancel</Button>
-              <Button variant="contained" onClick={startFixedClass}>
+              <Button variant="contained" onClick={startFixedClass} disabled={starting}>
                 Start
               </Button>
             </DialogActions>
