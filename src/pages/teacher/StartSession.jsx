@@ -132,27 +132,18 @@ const StartSession = () => {
           const lockData = lockSnap.data();
           const sRef = doc(db, "sessions", lockData.sessionId);
           const sSnap = await getDoc(sRef);
-
-          if (!sSnap.exists()) {
-            // Clear stale lock when the referenced session no longer exists
-            await deleteDoc(lockRef);
-          } else {
+          if (sSnap.exists()) {
             const data = sSnap.data();
-            if (["ongoing", "awaiting_screenshot"].includes(data.status)) {
-              setSessionId(sSnap.id);
-              setClassType(data.classType);
-              setTargetSeconds(data.durationSeconds || 0);
-              const st = data.startTime?.toDate?.()?.getTime?.();
-              if (st) {
-                startTsRef.current = st;
-                setElapsedSeconds(Math.floor((Date.now() - st) / 1000));
-              }
-              setStatus(data.status);
-              setRunning(data.status === "ongoing");
-            } else {
-              // Lock points to a finished session; clean it up so new starts are allowed
-              await deleteDoc(lockRef);
+            setSessionId(sSnap.id);
+            setClassType(data.classType);
+            setTargetSeconds(data.durationSeconds || 0);
+            const st = data.startTime?.toDate?.()?.getTime?.();
+            if (st) {
+              startTsRef.current = st;
+              setElapsedSeconds(Math.floor((Date.now() - st) / 1000));
             }
+            setStatus(data.status);
+            setRunning(data.status === "ongoing");
           }
         } else {
           // Legacy fallback: look up by sessions query
