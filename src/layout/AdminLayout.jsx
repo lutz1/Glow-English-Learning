@@ -12,7 +12,7 @@ const AdminLayout = ({ children }) => {
         display: "flex",
         flexDirection: isMobile ? "column" : "row",
         minHeight: "100vh",
-        width: "100vw",
+        width: "100%",
         overflowX: "hidden",
       }}
     >

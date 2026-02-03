@@ -23,7 +23,6 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PaidIcon from "@mui/icons-material/AttachMoney";
-import PendingIcon from "@mui/icons-material/HourglassEmpty";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import { db, storage } from "../../firebase";
 import {
@@ -67,8 +66,7 @@ const Payroll = () => {
   // Pagination state
   const [historyPage, setHistoryPage] = useState(0);
   const [historyRowsPerPage, setHistoryRowsPerPage] = useState(5);
-  const [sessionPage, setSessionPage] = useState(0);
-  const [sessionRowsPerPage, setSessionRowsPerPage] = useState(5);
+  const [sessionLoadLimit, setSessionLoadLimit] = useState(10);
 
   const fetchPayrollHistory = async () => {
     try {
@@ -130,7 +128,7 @@ const Payroll = () => {
   }, [payrollHistory, historyOpen]);
 
   useEffect(() => {
-    setSessionPage(0);
+    setSessionLoadLimit(10);
   }, [teacherSessions, dateFrom, dateTo, teacherViewOpen]);
 
   // Camera start/stop when dialog opens
@@ -670,7 +668,6 @@ const Payroll = () => {
     (sum, d) => sum + (d.totalEarnings || 0),
     0
   );
-  const numberPendingPayroll = Object.values(summaryData).filter((d) => !d.paid).length;
 
   const glassCard = {
     background: "rgba(255,255,255,0.1)",
@@ -686,19 +683,19 @@ const Payroll = () => {
     historyPage * historyRowsPerPage + historyRowsPerPage
   );
   const filteredSessionsForDialog = filterByDate(teacherSessions, dateFrom, dateTo);
-  const paginatedSessionsForDialog = filteredSessionsForDialog.slice(
-    sessionPage * sessionRowsPerPage,
-    sessionPage * sessionRowsPerPage + sessionRowsPerPage
-  );
+  const visibleSessionsForDialog = filteredSessionsForDialog.slice(0, sessionLoadLimit);
 
   return (
     <AdminLayout>
       <Box
         sx={{
-          p: 3,
+          p: { xs: 2, sm: 3 },
           minHeight: "100vh",
           background: "linear-gradient(160deg, #2c3e50, #34495e, #2c3e50)",
           color: "#fff",
+          width: "100%",
+          boxSizing: "border-box",
+          overflowX: "hidden",
         }}
       >
         <Typography variant="h4" gutterBottom fontWeight="bold">
@@ -706,8 +703,8 @@ const Payroll = () => {
         </Typography>
 
         {/* Totals */}
-        <Grid container spacing={3} mb={4}>
-          <Grid item xs={12} md={6}>
+        <Grid container spacing={3} mb={4} sx={{ maxWidth: "100%", overflow: "hidden" }}>
+          <Grid item xs={12}>
             <Card sx={glassCard}>
               <CardContent>
                 <Stack direction="row" alignItems="center" spacing={2}>
@@ -717,21 +714,6 @@ const Payroll = () => {
                   <Box>
                     <Typography variant="subtitle2">Total Payroll</Typography>
                     <Typography variant="h5">₱{totalPayrollPaid.toFixed(2)}</Typography>
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={glassCard}>
-              <CardContent>
-                <Stack direction="row" alignItems="center" spacing={2}>
-                  <Avatar sx={{ bgcolor: "#fff", color: "error.main" }}>
-                    <PendingIcon />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="subtitle2">Pending Payroll</Typography>
-                    <Typography variant="h5">{numberPendingPayroll}</Typography>
                   </Box>
                 </Stack>
               </CardContent>
@@ -748,8 +730,8 @@ const Payroll = () => {
         </Button>
 
         {/* Teacher Summary */}
-        <Card sx={glassCard}>
-          <CardContent>
+        <Card sx={{ ...glassCard, maxWidth: "100%", overflow: "hidden" }}>
+          <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", color: "#64b5f6" }}>
               👩‍🏫 Teacher Payroll
             </Typography>
@@ -757,7 +739,7 @@ const Payroll = () => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr",
+                gridTemplateColumns: { xs: "1fr", md: "2fr 2fr 1fr 1fr 1fr" },
                 p: 1.5,
                 borderRadius: "10px",
                 mb: 1,
@@ -773,7 +755,7 @@ const Payroll = () => {
               <Typography>🗑 Delete</Typography>
             </Box>
 
-            <List>
+            <List sx={{ p: 0, m: 0 }}>
               {Object.entries(summaryData).map(([id, data]) => {
                 const teacherInfo = teacherMap[data.teacherId] || {};
                 return (
@@ -781,15 +763,16 @@ const Payroll = () => {
                     key={id}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr",
+                      gridTemplateColumns: { xs: "1fr", md: "2fr 2fr 1fr 1fr 1fr" },
                       alignItems: "center",
-                      gap: 2,
+                      gap: { xs: 1, md: 2 },
                       mb: 1,
                       p: 2,
                       borderRadius: "12px",
                       bgcolor: "rgba(255,255,255,0.05)",
                       "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
                       textAlign: "center",
+                      listStyle: "none",
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -882,7 +865,7 @@ const Payroll = () => {
             </Stack>
 
             <Stack spacing={2}>
-              {paginatedSessionsForDialog.map((s) => (
+              {visibleSessionsForDialog.map((s) => (
                 <Card
                   key={s.id}
                   sx={{
@@ -942,24 +925,33 @@ const Payroll = () => {
               ))}
             </Stack>
 
-            <TablePagination
-              component="div"
-              count={filteredSessionsForDialog.length}
-              page={sessionPage}
-              onPageChange={(_e, p) => setSessionPage(p)}
-              rowsPerPage={sessionRowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setSessionRowsPerPage(parseInt(e.target.value, 10));
-                setSessionPage(0);
-              }}
-              rowsPerPageOptions={[5, 10, 20]}
-              sx={{ color: "#fff" }}
-            />
+            {/* Load More Button */}
+            {visibleSessionsForDialog.length < filteredSessionsForDialog.length && (
+              <Box sx={{ textAlign: "center", py: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => setSessionLoadLimit((prev) => prev + 10)}
+                  sx={{ borderRadius: "12px" }}
+                >
+                  Load More Sessions
+                </Button>
+              </Box>
+            )}
+            {visibleSessionsForDialog.length >= filteredSessionsForDialog.length && filteredSessionsForDialog.length > 0 && (
+              <Box sx={{ textAlign: "center", py: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Showing all {filteredSessionsForDialog.length} sessions
+                </Typography>
+              </Box>
+            )}
 
             <Box sx={{ mt: 3, textAlign: "right" }}>
               <Typography variant="h6" fontWeight="bold">
                 Total Amount: ₱
-                {filterByDate(teacherSessions, dateFrom, dateTo).reduce((sum, s) => sum + (s.totalEarnings || 0), 0).toFixed(2)}
+                {filterByDate(teacherSessions, dateFrom, dateTo)
+                  .filter((s) => s.status !== "paid")
+                  .reduce((sum, s) => sum + (s.totalEarnings || 0), 0)
+                  .toFixed(2)}
               </Typography>
             </Box>
 
@@ -1178,7 +1170,10 @@ const Payroll = () => {
             }}
           >
             Total Amount: ₱
-            {filterByDate(teacherSessions, dateFrom, dateTo).reduce((sum, s) => sum + (s.totalEarnings || 0), 0).toFixed(2)}
+            {filterByDate(teacherSessions, dateFrom, dateTo)
+              .filter((s) => s.status !== "paid")
+              .reduce((sum, s) => sum + (s.totalEarnings || 0), 0)
+              .toFixed(2)}
           </Typography>
 
           <DialogContent>

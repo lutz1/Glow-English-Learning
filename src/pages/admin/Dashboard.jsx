@@ -31,7 +31,6 @@ import { useAuth } from "../../hooks/useAuth";
 
 import SchoolIcon from "@mui/icons-material/School";
 import PaidIcon from "@mui/icons-material/Paid";
-import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import AdminLayout from "../../layout/AdminLayout";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import jsPDF from "jspdf";
@@ -86,7 +85,6 @@ const Dashboard = () => {
 
   // payroll / sessions / analytics
   const [totalPayroll, setTotalPayroll] = useState(0);
-  const [pendingPayroll, setPendingPayroll] = useState(0);
   const [sessions, setSessions] = useState([]);
   const [earningData, setEarningData] = useState([]); // for chart (array of { label, earnings })
   const [topTeachers, setTopTeachers] = useState([]);
@@ -174,7 +172,6 @@ function normalizeRange(range) {
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setSessions(all);
       setTotalPayroll(all.filter((s) => (s.status || "").toLowerCase() === "completed").reduce((acc, s) => acc + (Number(s.totalEarnings) || 0), 0));
-      setPendingPayroll(all.filter((s) => (s.status || "").toLowerCase() === "pending").reduce((acc, s) => acc + (Number(s.totalEarnings) || 0), 0));
       setLoading(false);
     });
     return () => unsub();
@@ -582,18 +579,6 @@ useEffect(() => {
                 <Box>
                   <Typography variant="subtitle2">Total Payroll</Typography>
                   <Typography variant="h5">₱{totalPayroll.toFixed(2)}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={4}>
-            <Card sx={glassCard}>
-              <CardContent sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <HourglassEmptyIcon fontSize="large" sx={{ color: "#ffb74d" }} />
-                <Box>
-                  <Typography variant="subtitle2">Pending Earnings</Typography>
-                  <Typography variant="h5">₱{pendingPayroll.toFixed(2)}</Typography>
                 </Box>
               </CardContent>
             </Card>
